@@ -1,0 +1,5 @@
+max joints: 41
+total frames: 1
+duration: 0
+~~~~ objects_counts - Total: 1 ~~~~
+Knight: 1

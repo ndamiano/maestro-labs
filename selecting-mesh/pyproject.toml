@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "selecting-mesh"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["worldclaw", "ai-harness"]
+
+[tool.setuptools]
+py-modules = ["select_mesh"]
+
+[tool.uv.sources]
+worldclaw = { path = "/home/nick/Documents/Labs/worldclaw", editable = true }
+ai-harness = { path = "/home/nick/Documents/AI-Harness", editable = true }

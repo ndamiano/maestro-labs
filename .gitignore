@@ -1,0 +1,43 @@
+# The lab is 78 GB of weights, renders and clones. What belongs in git is what we WROTE:
+# code, notes and results. Everything else is reproducible or someone else's.
+
+# Nothing by default; text we authored is added back below.
+*
+
+# ...but always descend into directories, or the un-ignore rules below never match.
+!*/
+
+!*.py
+!*.md
+!*.sh
+!*.txt
+!*.toml
+!*.yaml
+!*.yml
+!*.cfg
+!.gitignore
+
+# Someone else's repo, vendored for a spike.
+worldclaw/
+penny-fork/
+scene-gen/Word2World/
+rig-lab/SkinTokens/
+rig-lab/UniRig/
+rig-lab/AniGen/
+rig-lab/Anytop/
+rig-lab/kimodo/
+img2threed/TripoSplat/
+img2threed/img2threejs/
+
+# Ours, but not source.
+**/.venv/
+**/venv/
+**/node_modules/
+**/__pycache__/
+**/.pytest_cache/
+**/logs/
+**/out/
+**/outputs/
+**/viz/
+**/renders/
+img2threed/lato2/

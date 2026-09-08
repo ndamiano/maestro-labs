@@ -1,0 +1,9 @@
+**CHANGE NOTE**
+
+1. **SPECIES — Guppy, `flee_distance`: 60 → 35.**
+   In the Guppy entry of the 10-slot SPECIES roster, set `flee_distance` to 35 (pixels). This narrows the radius at which a guppy enters its "flee" state (FISH_AI transition rule: player within `flee_distance`), so a guppy no longer panics at the 60-pixel standoff that made early chases start the instant the player drifted nearby. At the 5–8 px body scale of tier 1, 35 px gives the player room to close to within striking range before the guppy breaks, turning the first encounters into short, winnable intercepts instead of open-water pursuits.
+
+2. **SPECIES — Guppy, `base_speed`: 90 → 75.**
+   In the same Guppy entry, set `base_speed` to 75 (pixels per second). The flee-state speed multiplier is ×1.4, so guppy flee speed drops from 126 px/s to 105 px/s (with the ±15 % spawn variation the range becomes ≈ 89 – 121 px/s). The player's starting speed is 140 px/s, so the player now holds a clear 19–51 px/s advantage in a flee chase instead of the previous 14 px/s gap that was sometimes reversed by the upper variation bound. This makes the "chase you almost never win" into a catchable pursuit, letting the first eat land within a few seconds of spawning rather than after repeated failed intercepts.
+
+No other records, systems, or values are touched.

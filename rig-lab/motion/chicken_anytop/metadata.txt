@@ -1,0 +1,5 @@
+max joints: 40
+total frames: 489
+duration: 0
+~~~~ objects_counts - Total: 3 ~~~~
+ChickenTest: 3

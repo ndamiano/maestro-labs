@@ -1,0 +1,1 @@
+Position squared error per bvh file:../motion/knight_bvh/knight.bvh: 0.000000

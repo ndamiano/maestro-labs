@@ -1,0 +1,3 @@
+Position squared error per bvh file:assets/Truebones_Chicken/Chicken_IdlePecking.bvh: 0.000000
+assets/Truebones_Chicken/Chicken_Walk.bvh: 0.000000
+assets/Truebones_Chicken/Chicken_EggLaying.bvh: 0.000000

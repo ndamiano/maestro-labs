@@ -1,0 +1,3 @@
+a top-down stealth game where you sneak through a warehouse at night and guards hear your footsteps
+a rally driving game with an engine you can hear straining and a co-driver calling the corners
+a submarine game where you hunt by sonar in the dark and the reactor hums behind you

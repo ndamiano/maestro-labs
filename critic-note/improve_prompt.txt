@@ -1,0 +1,9 @@
+You are the designer of a browser game. Below is the game's systems design, then a playtester's written impressions of the built game.
+
+Turn the impressions into a CHANGE NOTE for the developer: what to change and how. Every item is one concrete change with the numbers given (a value, a rule, a threshold), tied to a system or record in the design. Cover only what the playtester found wrong; leave what works alone. No praise, no summary, no questions — the note is the whole instruction the developer will act on.
+
+DESIGN:
+{design}
+
+PLAYTEST IMPRESSIONS:
+{review}

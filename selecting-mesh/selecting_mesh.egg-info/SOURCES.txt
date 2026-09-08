@@ -1,0 +1,7 @@
+pyproject.toml
+select_mesh.py
+selecting_mesh.egg-info/PKG-INFO
+selecting_mesh.egg-info/SOURCES.txt
+selecting_mesh.egg-info/dependency_links.txt
+selecting_mesh.egg-info/requires.txt
+selecting_mesh.egg-info/top_level.txt

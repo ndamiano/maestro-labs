@@ -1,0 +1,8 @@
+An open world game where you explore an island and find treasure.
+Make me a racing game with a career mode. The player should be able to upgrade their car and unlock new races with their winnings.
+A game where you are tasked with quests to slay monsters.
+A farming game where the seasons change.
+A card battler with deck building.
+A dungeon crawler with permadeath.
+Explore a haunted forest at night and escape before dawn.
+Survive on a derelict space station.

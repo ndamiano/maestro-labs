@@ -1,0 +1,31 @@
+Build this top-down 2D Formula 1 racing game. It is made of these systems.
+
+SYSTEMS: Track, Car, Physics, Player, Rival, Lap, Tyre, Pit, Race, Camera, HUD, Screens, Audio, Art.
+
+TRACK: one closed circuit laid out by a seeded generator — nothing is hand-drawn. The generator places 14 to 18 control points around a jittered ellipse (each point pushed in or out by a random fraction of the radius, angles spaced with random jitter), rounds them into a smooth closed loop by sampling a closed spline at 400 evenly spaced points, and then verifies: no two non-adjacent segments of the sampled loop intersect, no bend is tighter than the car can drive at pit-lane speed, and every sample is at least a road width from every other non-adjacent sample. If any check fails the generator re-rolls with the next seed. The track is a record: seed, the sample list, road half-width (52 px), the start index, total length, bounds, and a lookup that answers, for any world point, the nearest sample index and the signed distance from the centreline. A sample is a record: x, y, unit tangent, unit normal, curvature, and cumulative distance from the start. Everything else reads the track through that record — the road drawing, the on-road test, the lap progress, the rival steering — so there is one geometry and no second copy of it. The track is drawn once to an offscreen canvas: grass, then the asphalt as one thick stroke along the samples, then kerb stripes on the outside of every bend, a dashed centreline, and the start/finish chequer across the road at the start index.
+
+CAR: a record — id, name, colour, position, heading, forward speed, lateral slip, throttle, brake, steer, the tyre record, the lap record, a pit state, and the art id of its sprite. The same record for the player and every rival; only what sets throttle, brake and steer differs.
+
+PHYSICS: one step function used by every car. Throttle adds engine force scaled by tyre grip, brake subtracts, drag grows with the square of speed, top speed 640 px/s on asphalt. Steering turns the heading at a rate that falls with speed. Off the road (signed distance beyond the half-width) grip drops to a third and top speed to 240. Cars are circles of radius 16 for collision: two overlapping cars are pushed apart along the line between them and each loses a fifth of its speed. The step is called with a fixed timestep of 1/120 s accumulated from the frame clock, so the simulation is the same at any frame rate.
+
+PLAYER: W or up throttle, S or down brake, A/D or left/right steer, R restarts the race. Touch: left half of the screen steers by horizontal drag, right half is throttle with a brake button.
+
+RIVAL: three rivals, each a record of name, colour, a skill from 0.82 to 0.96 and a look-ahead distance. A rival steers toward the sample that far ahead of its nearest sample, offset toward the inside of the coming bend, throttles to a target speed that is top speed times skill times a factor that drops with the curvature ahead, and brakes when its speed is above what the bend ahead allows. A rival that is off the road steers for the nearest sample and holds a low speed until it is back on. A rival with tyres below a quarter takes the pit branch on its next pass of the pit entry.
+
+LAP: per car, a record — current lap, the best lap time, the current lap's start time, a list of finished lap times, and progress as the cumulative distance of its nearest sample. A lap counts when the car's nearest sample crosses the start index going forward having passed the halfway index since the last count, so cutting across the infield or reversing over the line never counts. Race position is the order of cars by lap then progress, recomputed every step.
+
+TYRE: per car, a record — wear from 0 (fresh) to 1 (gone). Wear grows each step by a base rate times speed, doubled while steering hard, tripled off the road. Grip is 1 at fresh falling to 0.45 at gone, applied in the physics step to engine force, steering rate and top speed. The HUD shows the player's tyre as a bar that turns amber at half and red below a quarter.
+
+PIT: the generator also lays a pit lane: a branch that leaves the track 80 px before the start index on the inside, runs parallel to the main straight at a 48 px offset, and rejoins 80 px after the start; its middle 60 px is the pit box. Inside the lane top speed is 120. A car that stops in the box (speed under 5) for 2.5 s gets fresh tyres; a timer arc drawn over the car shows the wait. The lane is part of the track record: an on-pit-lane test and an in-box test, both used by the physics step and the rival steering.
+
+RACE: three laps. A countdown of 3-2-1-GO before control is given; the four cars start on a grid of two rows behind the start line. The race ends for the player on crossing the line after lap three; the finish order is the position list at that moment, with rivals still racing filling in as they finish. A target lap time is shown, computed by running a rival of skill 0.9 for one lap headless at load.
+
+CAMERA: follows the player, centred, rotated so the player's heading is up, looking slightly ahead at speed, clamped to the track bounds. The canvas fills the window and the view scales so 1100 world px fit the shorter screen edge.
+
+HUD: lap counter (current of three), current lap time and best lap, race position of four, speed, the tyre bar, a minimap of the whole loop with a dot per car, and a message line for position changes, lap times and "PIT" prompts.
+
+SCREENS: title (name, controls, Start) → countdown → racing → pit (an overlay on racing while the player is in the lane) → finished (order, every car's best lap, Race Again, Title). Escape from racing pauses with Resume and Title.
+
+AUDIO: generated with the Web Audio API — an engine tone whose pitch follows the player's speed, a tyre squeal on hard steering at speed, a thud on collision, the countdown beeps, and a fanfare at the finish.
+
+ART: the car sprites are AI art — ask for one top-down Formula 1 car per colour (four: red, blue, yellow, green) as sprites and draw each car as its sprite rotated to its heading; the grass is a seamless tile. Everything else — road, kerbs, pit lane, HUD, minimap — is drawn in code.

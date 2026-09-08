@@ -1,0 +1,151 @@
+core/art.js (4404 chars)  imports: lib/sprites.js
+  imgSrc(key, ext)
+  loadImage(key, ext = 'webp')
+  getImage(key)
+  loadActor(key)
+  getActor(key)
+  drawActor(ctx, key, x, y, { dir = 'front', anim = 'idle', t = 0, once = false, start = 0, scale = 1 } = {})
+  actorDuration(key, anim)
+  actorScale(key, targetH)
+  tokenColor(key)
+  drawToken(ctx, key, cx, cy, size, isPlayer)
+  preloadAll(onProgress)
+core/flow.js (1457 chars)
+  setScreen(name, data)
+  newGame(resetCampaign)
+  startStory(beatId, then, battle)
+  goCamp()
+  startDeploy(battle)
+  startBattle(battle)
+  finishBattle(result, battle)
+  afterResult(battle)
+  campaignVictory()
+  toTitle()
+  G = object
+core/lib.js (108 chars)
+  {createCanvas}
+core/ui.js (5455 chars)  imports: lib/input.js, lib/audio.js, art.js
+  resetInputFrame()
+  getButtons()
+  text(ctx, str, x, y, { size = 16, color = '#f2e8d0', align = 'left', bold = false, baseline = 'middle', maxWidth = 0 } = {})
+  wrapLines(ctx, str, size, maxWidth, bold = false)
+  panel(ctx, x, y, w, h, { fill = 'rgba(28,24,20,0.92)
+  button(ctx, label, x, y, w, h, opts = {})
+  bar(ctx, x, y, w, h, ratio, color, bg = 'rgba(0,0,0,0.55)
+  hpColor(ratio)
+  drawImageScaled(ctx, img, x, y, w, h, { alpha = 1, cover = false } = {})
+  itemIcon(ctx, rec, x, y, size)
+  clickedButton = null
+core/view.js (1170 chars)  imports: lib.js, lib/input.js, lib/input.js
+  view = createCanvas(document.getElementById('ga
+  ctx = view.ctx
+data/battles.js (10705 chars)  imports: systems/units.js, data/items.js
+  buildBattle(index)
+  ENEMY_KINDS = object
+  BATTLE_COUNT = B.length
+  BATTLE_NAMES = B.map((b) => b.name)
+  ENEMY_KINDS keys: soldier, militia, axeman, archer, mage, shaman, darkmage, cavalier, wyvern, healer, boss, warlord
+data/classes.js (3300 chars)
+  classByName(name)
+  CLASSES = object
+  STAFF_CLASSES = new Set
+  FLYING = new Set
+  CLASSES keys: swordKnight, lanceKnight, archer, mage, healer, cavalier, troubadour, wyvernRider, general, greatKnight, sniper, sage
+data/items.js (4183 chars)
+  isWeapon(rec)
+  makeItem(rec)
+  makeWeapon(name)
+  makeItemByName(name)
+  WEAPONS = array
+  ITEMS = array
+  ART = object
+  ART keys: weapons
+data/story.js (6656 chars)  imports: items.js
+  beatById(id)
+  storyBeforeFor(n)
+  storyAfterFor(n)
+  BEATS = array
+data/terrain.js (2176 chars)
+  makeTerrain(name, x, y)
+  isPassable(tile, unit)
+  moveCostOf(tile, unit)
+  TERRAIN_TYPES = object
+  TERRAIN_TYPES keys: Plain, Forest, Mountain, name, passableBy
+index.html (927 chars)
+main.js (1918 chars)  imports: core/view.js, lib/input.js, lib/audio.js, core/art.js, core/ui.js, core/flow.js, systems/campaign.js, screens/title.js, screens/story.js, screens/camp.js, screens/deploy.js, screens/battle.js, screens/result.js, screens/ending.js
+screens/battle.js (35337 chars)  imports: core/view.js, lib/input.js, core/ui.js, core/art.js, lib/audio.js, systems/campaign.js, systems/units.js, systems/combat.js, systems/movement.js, data/items.js, systems/ai.js, systems/leveling.js, data/terrain.js, systems/mapgen.js, core/flow.js, systems/campaign.js
+  BattleScreen({ battle })
+screens/camp.js (14391 chars)  imports: core/view.js, lib/input.js, core/ui.js, core/art.js, lib/audio.js, data/items.js, systems/leveling.js, systems/units.js, core/flow.js, data/battles.js
+  CampScreen()
+screens/deploy.js (10167 chars)  imports: core/view.js, lib/input.js, core/ui.js, core/art.js, lib/audio.js, systems/campaign.js, systems/mapgen.js, data/terrain.js, systems/movement.js, core/flow.js, systems/units.js, data/items.js
+  DeployScreen({ battle })
+screens/ending.js (2269 chars)  imports: core/view.js, lib/input.js, core/ui.js, core/art.js, core/flow.js, systems/campaign.js
+  EndScreen()
+screens/result.js (4336 chars)  imports: core/view.js, lib/input.js, core/ui.js, lib/audio.js, systems/campaign.js, core/flow.js, data/battles.js
+  ResultScreen({ result, battle })
+screens/story.js (4952 chars)  imports: core/view.js, lib/input.js, core/ui.js, core/art.js, lib/audio.js, data/story.js, core/flow.js, systems/campaign.js, data/battles.js, data/items.js
+  StoryScreen({ beatId, then, battle })
+screens/title.js (2000 chars)  imports: core/view.js, lib/input.js, core/ui.js, core/art.js, lib/audio.js, core/flow.js, systems/campaign.js
+  TitleScreen()
+systems/ai.js (4945 chars)  imports: units.js, combat.js, movement.js
+  enemyActs(enemy, battle, playerUnits, allUnits, grid)
+  facingTo(from, to)
+  orderEnemies(enemies, playerUnits)
+systems/campaign.js (4150 chars)  imports: units.js, data/battles.js, data/items.js, leveling.js
+  resetCampaign()
+  lord()
+  convoyFree()
+  addToConvoy(item)
+  grantReward(itemRec)
+  sell(rec)
+  buy(rec)
+  moveConvoyToUnit(item, unit)
+  moveUnitToConvoy(item, unit)
+  equip(unit, weapon)
+  hasMasterSeal()
+  consumeSeal()
+  recruit(def)
+  currentBattleRecord()
+  campaignDone()
+  CAMPAIGN = object
+  CAMPAIGN keys: currentBattle, gold, roster, deployed, items, storyFlags, battlesCompleted, totalTurnsPlayed, started
+systems/combat.js (5112 chars)  imports: units.js, data/terrain.js
+  accuracy(w)
+  triangleBonus(aType, dType)
+  tileAt(battle, x, y)
+  computePreview(attacker, defender, battle)
+  resolveCombat(attacker, defender, battle)
+systems/leveling.js (1773 chars)  imports: units.js, units.js
+  xpForKill(player, foe)
+  awardXp(unit, amount)
+  canPromote(unit)
+  promoteUnit(unit)
+  makeRecruit(def)
+  XP_HIT = 3
+  XP_HEAL = 2
+systems/mapgen.js (6622 chars)  imports: data/terrain.js
+  mulberry32(seed)
+  generateMap(battle)
+systems/movement.js (2906 chars)  imports: data/terrain.js
+  unitAt(units, x, y)
+  reachableTiles(unit, grid, allUnits, w, h)
+  pathFrom(prev, startKey, endKey)
+  findPath(unit, grid, allUnits, from, to, w, h, ignoreUnits = false)
+  manhattan(a, b)
+systems/units.js (2777 chars)  imports: data/classes.js, data/items.js
+  resetUnitIds()
+  makeUnit({ name, className, level = 1, weapon = null, items = [], x = 0, y = 0, side = 'player', commander = false, art = null })
+  levelEnemy(u)
+  weaponOf(u)
+  weaponType(u)
+  isStaffUser(u)
+  isMagic(u)
+  attackStat(u)
+  defenceStat(u, vsMagic)
+  rangeOf(u)
+  canAttack(u)
+  canHeal(u)
+  canAct(u)
+  xpThreshold(level)
+  STAT_KEYS = array
+  PHYSICAL = new Set
