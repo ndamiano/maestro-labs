@@ -57,6 +57,9 @@ class Replay:
     system: str
     tools: List[Dict]
     turns: List[Turn] = field(default_factory=list)
+    # Compactions whose note was never archived (the log format predates it). The transcript the
+    # build really sent cannot be rebuilt at or after these, so a probe must not pretend otherwise.
+    gaps: List[int] = field(default_factory=list)
 
     @property
     def fidelity(self) -> Optional[float]:
@@ -229,12 +232,18 @@ def _tools_for(target: Path, build_id: str, source_run: Path) -> Dict:
     return tools
 
 
-def run_to_position(source_run, position: int, target_dir) -> Replay:
+def run_to_position(source_run, position: int, target_dir, *,
+                    before_compaction: bool = False) -> Replay:
     """Materialise `target_dir` as `source_run` stood before turn `position`.
 
     `position` is a turn number from the source log; every turn BEFORE it is replayed, and the
     returned messages are what that turn's request carried. A position past the end replays the
     whole build.
+
+    `before_compaction` stops short of applying the compaction recorded AT `position`, handing back
+    the transcript that compaction was about to act on. That is the only useful position for an arm
+    that changes what compaction does: compacting an already-compacted transcript finds nothing to
+    trim, writes no new note, and leaves every arm carrying the note the build really used.
     """
     source_run, target = Path(source_run), Path(target_dir)
     if target.exists():
@@ -263,7 +272,12 @@ def run_to_position(source_run, position: int, target_dir) -> Replay:
             out.messages = []
             continue
         if record["kind"] == "compact":
-            out.messages = turn_log._compacted(out.messages, record)
+            if before_compaction and record["turn"] >= position:
+                break
+            if record.get("note") is None:
+                out.gaps.append(record["turn"])
+            out.messages = [m for m in turn_log._compacted(out.messages, record)
+                            if m.get("content") is not None or m.get("tool_calls")]
             continue
         if record["kind"] != "turn":
             continue
