@@ -41,3 +41,11 @@ img2threed/img2threejs/
 **/viz/
 **/renders/
 img2threed/lato2/
+
+# Weights live on ext4 at /var/lib/models/rig; these are symlinks to them, and the text files
+# that used to sit under them are the model's own, not ours.
+rig-lab/hf_cache
+rig-lab/i2v/turbo
+rig-lab/AniGen/ckpts
+rig-lab/SkinTokens/experiments
+img2threed/lato2/ckpt
