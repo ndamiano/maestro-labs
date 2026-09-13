@@ -233,12 +233,17 @@ def _tools_for(target: Path, build_id: str, source_run: Path) -> Dict:
 
 
 def run_to_position(source_run, position: int, target_dir, *,
-                    before_compaction: bool = False) -> Replay:
+                    before_compaction: bool = False, build: Optional[str] = None) -> Replay:
     """Materialise `target_dir` as `source_run` stood before turn `position`.
 
     `position` is a turn number from the source log; every turn BEFORE it is replayed, and the
     returned messages are what that turn's request carried. A position past the end replays the
     whole build.
+
+    `build` names which build_id `position` belongs to. A run dir holds a build per FIX, each
+    restarting the turn count from zero, so a bare position is ambiguous the moment a run has been
+    fixed — and the first build to reach that number wins, which is rarely the one meant. Every
+    earlier build is still replayed in full: the disk a later build starts from is what they left.
 
     `before_compaction` stops short of applying the compaction recorded AT `position`, handing back
     the transcript that compaction was about to act on. That is the only useful position for an arm
@@ -272,7 +277,7 @@ def run_to_position(source_run, position: int, target_dir, *,
             out.messages = []
             continue
         if record["kind"] == "compact":
-            if before_compaction and record["turn"] >= position:
+            if before_compaction and _here(build, build_id) and record["turn"] >= position:
                 break
             if record.get("note") is None:
                 out.gaps.append(record["turn"])
@@ -282,7 +287,7 @@ def run_to_position(source_run, position: int, target_dir, *,
         if record["kind"] != "turn":
             continue
         out.messages = out.messages + (record.get("added") or [])
-        if record["turn"] >= position:
+        if _here(build, build_id) and record["turn"] >= position:
             break
         for rel, when in schedule.items():
             if when <= record["turn"] and (src_game / rel).exists():
@@ -311,6 +316,11 @@ def run_to_position(source_run, position: int, target_dir, *,
             evidence=bool(replayed.strip()) and bool(following) and not trouble,
             error="; ".join(trouble) or None))
     return out
+
+
+def _here(want: Optional[str], build_id: str) -> bool:
+    """Is this the build the position was named in? No name means the first build to reach it."""
+    return want is None or want == build_id
 
 
 def _next_turn(records: List[Dict], turn: int) -> Dict:

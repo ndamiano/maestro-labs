@@ -1,0 +1,3 @@
+Below is the game as it stands: each file, what it imports, and every declaration with its line range. Read a file only to edit it, and read the lines you need with offset and lines rather than the whole file.
+
+{map}

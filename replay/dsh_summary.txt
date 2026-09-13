@@ -1,0 +1,18 @@
+Your task is to create a detailed summary of the conversation so far, paying close attention to the
+user's explicit requests and your previous actions. This summary should be thorough in capturing
+technical details, code patterns, and architectural decisions that would be essential for continuing
+the work without losing context.
+
+Summarize the conversation so far under these headings, in this order:
+
+1. Primary Request and Intent: what the user asked for, in their own terms.
+2. Key Technical Concepts: the technologies, conventions and design decisions in play.
+3. Files and Code Sections: every file you created, read or edited, why it matters, and the
+   important code in it.
+4. Errors and Fixes: what went wrong and how it was resolved.
+5. Pending Jobs: work explicitly asked for that is not done.
+6. Current Work: precisely what you were doing immediately before this summary.
+7. Next Step: the single next action, and how it follows from the work above.
+8. Critical Context: anything else needed to continue without re-deriving it.
+
+Write only the summary.
