@@ -3,9 +3,15 @@
 The question is not whether the median turn is small — it is how often the same prompt goes over a
 ceiling. That is a tail, so only the individual samples answer it.
 """
-import sys, time, statistics
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import time, statistics
 from pathlib import Path
-import probe, arms_rate
+from lib.replay import probe
+import arms_rate
 
 run, pos, k = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
 src = Path("/home/nick/output/runs") / run

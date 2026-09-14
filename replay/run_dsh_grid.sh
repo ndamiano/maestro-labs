@@ -2,7 +2,7 @@
 # dsh arm x3 on three heavy-compaction builds, each run to done or the source's step cap.
 # Serial: one GPU. Logs in ~/output/dsh-grid/.
 cd "$(dirname "$0")"
-export PYTHONPATH=~/Documents/ai-agent-test/src:.
+export PYTHONPATH=..
 PY=~/Documents/ai-agent-test/venv/bin/python
 OUT=~/output/dsh-grid; mkdir -p "$OUT"
 R=~/output/runs

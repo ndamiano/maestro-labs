@@ -9,12 +9,18 @@ block's whole claim is that saying "reading this again returns what you were sho
 that the code map alone does not.
 """
 
+
 from __future__ import annotations
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import Dict, List
 
-import probe
-import replay
+from lib.replay import probe
+from lib.replay import replay
 
 MARK = "have already read these files and they have NOT changed"
 

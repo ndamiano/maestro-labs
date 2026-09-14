@@ -1,0 +1,5033 @@
+You are a software engineer, part of a three-person design team for a game built in HTML CSS and JS.
+Your design will be handed off to another agent to integrate with the rest of your team's design,
+and the agent will make decisions based purely on what is in the `engineering.md`. If something is
+important, add it and also add your logic for why.
+
+What you are responsible for:
+* Files that should exist.
+* Complex logic designs for things such as level generators.
+* Designing a test harness that enables validation.
+* Designing a set of tests that show that the game is finished and playable.
+
+What you are *NOT* responsible for:
+* Designing levels. The gameplay designer has designed the levels, your goal is to make the levels
+  function
+* Designing audio. The visual designer has created all of the necessary audio designs, you just need
+  to design their implementation.
+* Designing visuals. The visual designer has created the visuals already, your goal is to design the
+  code that makes the visuals work scalably.
+
+Your goal is to design scalable code solutions, and tests to validate that the game works as
+intended. If the game would be better without a piece, do not include it. If you are on the fence
+about a piece, cut it.
+
+The user's request is:
+<request>
+{request}
+</request>
+
+The gameplay designer's gameplay.md is:
+<gameplay.md>
+# gameplay.md
+
+## 1. Document Purpose
+
+This document is the complete gameplay design for a 2D side-scrolling platformer shooter. It defines the game’s dimensionality, world/stage structure, systems, algorithms, progression, player feel, HUD, and stage content.
+
+Another agent will integrate this design using only the information in this file. If a system is not described here, it should not be added. If a system is described, implement it with the given numbers and rules unless impossible for platform constraints.
+
+Working title: **Signal Courier**  
+Player character: **Courier Jex**  
+Core fantasy: A lone courier races through a dying city, restoring communication nodes with a set of tuned signal weapons.
+
+---
+
+## 2. Design Intent
+
+The game is a tight, readable, story-driven run-and-gun platformer.
+
+The player must:
+
+- Move left and right.
+- Jump.
+- Crouch.
+- Aim and shoot.
+- Progress through **2 worlds** and **5 stages per world**.
+- Unlock **4 gun types** through progression.
+- Reach the **Conduit** at the end of each stage.
+
+The fantasy is “signal recovery,” not rescue, pipe traversal, or kingdom saving. The world/stage structure is inspired by classic platformer progression, but the theme, hazards, weapons, and enemies are distinct.
+
+### Core Pillars
+
+1. **Readable movement**  
+   Jumping, crouching, and platforming must feel snappy and fair.
+
+2. **Weapon identity**  
+   Each gun has a clear mechanical role.
+
+3. **Safe challenge**  
+   Damage is avoidable if the player watches telegraphs and stage layout.
+
+4. **Smooth progression**  
+   The player always knows the next objective: reach the Conduit.
+
+5. **Optional completion**  
+   Cores provide replay value but are not required to finish the game.
+
+---
+
+## 3. Dimensionality
+
+The game uses **2D gameplay** on a single plane.
+
+- X axis: horizontal movement.
+- Y axis: vertical movement.
+- No Z axis.
+- No gameplay depth.
+- No 3D aiming.
+- No camera rotation.
+
+The visual designer may render the world with **2.5D parallax backgrounds**, but gameplay collision, movement, shooting, and camera are strictly 2D.
+
+### Coordinate System
+
+- Positive X is right.
+- Positive Y is down.
+- Stage origin is top-left.
+- Tile size is **32 pixels**.
+- Logical viewport is **960 x 540 pixels**, scaled to fit the screen while preserving aspect ratio.
+
+---
+
+## 4. Game States
+
+The game has these states:
+
+| State | Purpose |
+|---|---|
+| Title | Start, continue, new game, controls. |
+| Intro | Short story setup. |
+| Signal Map | World/stage selection. |
+| Stage | Main gameplay. |
+| Pause | Pause stage and offer restart/title/map. |
+| Stage Summary | Show stage results and continue. |
+| Game Over | Lives exhausted; retry stage or title. |
+| End | Final boss complete; show run stats. |
+
+### State Flow
+
+```text
+Title
+  -> Intro
+       -> Signal Map
+            -> Stage
+                 -> Stage Summary
+                      -> Signal Map
+                 -> Game Over
+                      -> Stage / Signal Map / Title
+            -> End
+                 -> Title / Signal Map
+```
+
+### Title Rules
+
+- If no progress exists:
+  - Show **Begin Signal**.
+- If progress exists:
+  - Show **Continue** at the furthest unlocked uncompleted stage.
+  - Show **New Signal**, which resets all progress.
+  - Show **Controls**.
+
+### Intro Rules
+
+- Show 4 short story cards.
+- Each card can be skipped with Enter, Space, or mouse click.
+- After intro, go to Signal Map.
+
+### Signal Map Rules
+
+- Show 2 worlds.
+- Each world shows 5 stages.
+- Stage states:
+  - Locked
+  - Unlocked
+  - Completed
+- Only unlocked stages can be started.
+- Completed stages can be replayed.
+- World 2 is locked until World 1 Stage 5 is completed.
+- After final completion, the map remains available for replay.
+
+### Stage Summary Rules
+
+Shown after non-final stage completion.
+
+Display:
+
+- Stage name.
+- Time.
+- Deaths in stage.
+- Cores collected in stage.
+- Total cores collected.
+- Buttons:
+  - Continue
+  - Signal Map
+
+### Game Over Rules
+
+Shown when lives reach 0.
+
+Display:
+
+- “Signal Lost.”
+- Buttons:
+  - Retry Stage
+  - Signal Map
+  - Title
+
+### End Rules
+
+Shown after World 2 Stage 5.
+
+Display:
+
+- “Signal Restored.”
+- Total time.
+- Total deaths.
+- Total cores collected out of 30.
+- Buttons:
+  - Signal Map
+  - Title
+
+---
+
+## 5. Story Progression
+
+The story is compact and stage-focused.
+
+### Premise
+
+The city’s central relay has gone silent. A malfunctioning maintenance swarm called the **Hush** has locked down districts one by one. Courier Jex must recover 10 signal nodes across two districts to restore the broadcast.
+
+### World 1: Sumpworks
+
+Theme:
+
+- Lower industrial canal.
+- Rust.
+- Pipes.
+- Low ceilings.
+- Conveyors.
+- Pits.
+- Enemy turrets.
+
+Story goal: Restore the lower relay by defeating the **Hush Warden**.
+
+### World 2: Skyloom
+
+Theme:
+
+- Floating market.
+- Vertical platforms.
+- Wind currents.
+- Wide gaps.
+- Open sightlines.
+- More aggressive enemy patterns.
+
+Story goal: Reach the central **Null Relay** and silence the final failure.
+
+### Stage Objective
+
+Every stage has one required objective:
+
+- Reach the **Conduit**.
+
+In boss stages:
+
+- Defeat the boss first.
+- The Conduit is locked until the boss is dead.
+
+### Cores
+
+- Each stage has 3 optional **Cores**.
+- Cores are not required to complete a stage.
+- Once collected, they persist globally.
+- Total possible cores: 30.
+- Cores are used only for completion stats.
+
+---
+
+## 6. World and Stage Structure
+
+The game starts with exactly **2 worlds** and **5 stages per world**.
+
+This is extensible in design, but only these 10 stages are required for the complete end-to-end game.
+
+### Stage Table
+
+| Stage | Name | Size in Tiles | Focus | Target Time |
+|---|---|---:|---|---:|
+| 1-1 | First Current | 75 x 12 | Tutorial | 45s |
+| 1-2 | Dredge Run | 95 x 12 | Moving platforms, conveyors | 70s |
+| 1-3 | Pressure Lock | 90 x 14 | Turrets, one-way platforms | 80s |
+| 1-4 | Rust Gallery | 105 x 12 | Crouching, drones, long low ceilings | 90s |
+| 1-5 | Hush Warden | 60 x 12 | Boss | 70s |
+| 2-1 | Lifted Bazaar | 80 x 20 | Vertical climb, wind | 80s |
+| 2-2 | Market Veils | 105 x 16 | One-way shelves, wraiths | 90s |
+| 2-3 | Windrace | 120 x 14 | Horizontal wind, timed platforms | 100s |
+| 2-4 | Highspire Ascent | 80 x 24 | Vertical pressure, golems | 110s |
+| 2-5 | Null Relay | 70 x 15 | Final boss | 120s |
+
+Target times are design goals, not enforced timers.
+
+---
+
+## 7. Controls
+
+Minimum platform: desktop browser with mouse and keyboard.
+
+Touch controls are out of scope.
+
+### Input Mapping
+
+| Action | Primary Input | Alternate Input |
+|---|---|---|
+| Move left | A | Left Arrow |
+| Move right | D | Right Arrow |
+| Jump | W | Up Arrow or Space |
+| Crouch | S | Down Arrow |
+| Aim and shoot | Left mouse button | J |
+| Switch to weapon 1 | 1 | — |
+| Switch to weapon 2 | 2 | — |
+| Switch to weapon 3 | 3 | — |
+| Switch to weapon 4 | 4 | — |
+| Cycle weapons forward | E | Q |
+| Pause | Esc | P |
+
+### Aiming Rules
+
+- Mouse aiming is the primary aiming method.
+- The player can aim in any 2D direction.
+- The player’s visual facing follows the mouse X relative to the player.
+- If mouse input is unavailable, the **J** key shoots in the player’s current facing direction.
+- Crouching lowers the muzzle origin and hitbox but does not restrict aim.
+
+### Weapon Switch Rules
+
+- Weapons 1 through 4 can be selected only if unlocked.
+- Attempting to select a locked weapon produces a UI deny animation and no weapon change.
+- Switching weapons sets a universal weapon-switch cooldown of **0.12 seconds**.
+- Each weapon also has its own fire cooldown.
+- The player cannot shoot while the universal weapon-switch cooldown is active.
+
+---
+
+## 8. Core Loop
+
+The core loop for each stage is:
+
+1. Move through the stage.
+2. Avoid hazards.
+3. Shoot or dodge enemies.
+4. Pick up optional Cores.
+5. Use weapons strategically.
+6. Reach checkpoint.
+7. Reach Conduit.
+8. Unlock next stage.
+
+The player is not required to kill all enemies. Enemies can be bypassed if the player accepts the risk.
+
+---
+
+## 9. Player System
+
+### Player Hitbox
+
+| State | Width | Height |
+|---|---:|---:|
+| Standing | 16 px | 24 px |
+| Crouching | 16 px | 12 px |
+
+The player’s feet are aligned to the bottom of the hitbox.
+
+### Player Health
+
+The player has **5 signal hearts**.
+
+- Each heart is 1 unit of health.
+- All enemy contact, enemy projectiles, hazards, boss attacks, and pits deal **1 heart** damage.
+- When hearts reach 0, the player dies.
+- After death, the player loses 1 life and respawns.
+
+### Player Lives
+
+- The player starts each stage with **3 lives**.
+- If lives reach 0, show Game Over.
+- On stage retry, lives reset to 3.
+- On death with lives remaining, respawn at last checkpoint with full hearts.
+
+### Damage and Invulnerability
+
+When the player takes damage:
+
+- Lose 1 heart.
+- Enter invulnerability for **1.0 seconds**.
+- Apply knockback:
+  - Horizontal: **280 px/s** away from damage source.
+  - Vertical: **-240 px/s** upward.
+- The player remains in control during invulnerability.
+- Enemy contact and enemy projectiles do not deal damage again during invulnerability.
+- Hazards do not deal damage again during invulnerability.
+
+### Death Rules
+
+If the player dies:
+
+1. If lives > 0:
+   - Lose 1 life.
+   - Respawn at last checkpoint.
+   - Restore hearts to 5.
+   - 1.0 second invulnerability.
+2. If lives = 0:
+   - Show Game Over.
+
+### Checkpoint Respawn
+
+Checkpoints are required every stage.
+
+When a checkpoint is activated:
+
+- Set respawn point.
+- Restore 1 heart if below 5.
+- Show checkpoint HUD notification.
+- Play checkpoint sound.
+
+If the player dies and no checkpoint has been activated:
+
+- Respawn at stage start.
+
+### Pit Rule
+
+If the player falls below the stage boundary by **64 pixels**:
+
+- Take 1 heart damage.
+- Teleport to last checkpoint.
+- If no checkpoint exists, teleport to stage start.
+- Enter invulnerability for **0.5 seconds**.
+
+If the player has 0 hearts from a pit:
+
+- Trigger normal death.
+
+---
+
+## 10. Movement System
+
+The player can move left, move right, jump, and crouch.
+
+### Movement Numbers
+
+| Parameter | Value |
+|---|---:|
+| Ground max speed | 240 px/s |
+| Crouched max speed | 120 px/s |
+| Air max speed | 240 px/s |
+| Ground acceleration | 2800 px/s² |
+| Air acceleration | 1900 px/s² |
+| Ground friction | 2800 px/s² |
+| Air friction | 400 px/s² |
+| Gravity | 1800 px/s² |
+| Max fall speed | 1100 px/s |
+| Initial jump velocity | -640 px/s |
+| Jump cut velocity | -320 px/s |
+| Coyote time | 0.09 seconds |
+| Jump buffer | 0.10 seconds |
+
+### Movement Algorithm
+
+Each fixed timestep:
+
+1. Read horizontal input.
+2. Determine target horizontal velocity:
+   - `targetVX = maxSpeed * inputX`
+3. Accelerate or decelerate toward `targetVX`.
+4. Apply gravity unless the player is in an updraft zone.
+5. Clamp fall speed.
+6. Handle jump input.
+7. Integrate X, resolve horizontal collision.
+8. Integrate Y, resolve vertical collision.
+9. Apply moving platform carry.
+10. Apply conveyor and wind effects.
+11. Update hitbox if crouch state changes.
+
+### Jump Algorithm
+
+The player can jump if:
+
+- Jump input was pressed within the last **0.10 seconds**, and
+- The player is grounded or within **0.09 seconds** of leaving ground.
+
+On jump:
+
+- Set vertical velocity to **-640 px/s**.
+- Clear jump buffer.
+
+Variable jump:
+
+- If the player releases jump while moving upward faster than **-320 px/s**, set vertical velocity to **-320 px/s**.
+
+### Crouch Algorithm
+
+- Crouch is held.
+- Crouching reduces height to 12 px.
+- Crouching reduces max horizontal speed to 120 px/s.
+- The player can jump while crouched.
+- The player can shoot while crouched.
+- The muzzle origin is lowered to match crouch height.
+
+### No Double Jump
+
+The player does not have a double jump.
+
+Reason:
+
+- Jump height and gap distance are calibrated for a single jump.
+- Crouching and aiming provide enough mechanical variety.
+- No double jump keeps platforming legible.
+
+---
+
+## 11. Collision System
+
+The game uses tile-based collision.
+
+### Tile Types
+
+| Tile / Object | Behavior |
+|---|---|
+| Solid tile | Blocks player, enemies, and projectiles. |
+| One-way platform | Blocks player only from below. Projectiles pass through. |
+| Spike | Damages player on contact. |
+| Conveyor tile | Solid tile that adds horizontal velocity to grounded player. |
+| Wind zone | Invisible or visible force field. Applies acceleration. |
+| Checkpoint | Triggers respawn save. |
+| Core | Optional collectible. |
+| Heart | Restores 1 heart if below max. |
+| Tuner | Unlocks a weapon. |
+| Conduit | Stage exit. |
+
+### Player Collision Rules
+
+- Player collides with solid tiles.
+- Player can land on one-way platforms.
+- Player can pass upward through one-way platforms.
+- Player cannot pass through solid tiles.
+- Moving platforms push the player if the player is standing on them.
+
+### One-way Platform Landing Rule
+
+A one-way platform is solid only if:
+
+- The player is moving downward, and
+- The player’s previous bottom was at or above the platform’s top, and
+- The player is not jumping through.
+
+Projectiles ignore one-way platforms.
+
+### Moving Platform Rules
+
+Moving platforms follow linear waypoint paths.
+
+If the player is standing on a moving platform:
+
+- Apply the platform’s position delta to the player each timestep.
+- Maintain the player’s foot offset relative to the platform.
+
+If the platform moves off-screen or resets on stage retry, the player is no longer carried.
+
+### Conveyor Rules
+
+Conveyor tiles apply a horizontal speed offset only while the player is grounded.
+
+- Right conveyor: +120 px/s horizontal offset.
+- Left conveyor: -120 px/s horizontal offset.
+- Total horizontal speed can be clamped to ±360 px/s while on a conveyor.
+
+### Wind Zone Rules
+
+Wind zones apply acceleration to the player while the player’s hitbox intersects the zone.
+
+| Wind Type | Acceleration | Clamp |
+|---|---:|---|
+| Updraft | -2400 px/s² vertical | Vertical speed min -420 px/s |
+| Horizontal gust right | +1600 px/s² horizontal | Horizontal speed max +360 px/s |
+| Horizontal gust left | -1600 px/s² horizontal | Horizontal speed min -360 px/s |
+
+Wind does not affect enemies unless specifically stated.
+
+---
+
+## 12. Camera System
+
+The camera follows the player.
+
+### Camera Rules
+
+- Logical viewport: 960 x 540.
+- Camera smoothing: `camera += (target - camera) * min(1, 8 * dt)`
+- Horizontal lookahead:
+  - If moving right: +120 px.
+  - If moving left: -120 px.
+  - If idle: 0 px.
+- Vertical target:
+  - Player center Y minus 32 px.
+- Camera is clamped to stage bounds.
+
+### Camera Feel
+
+- The camera should feel stable during jumps.
+- The camera should not pan faster than the player.
+- The camera should not show outside stage bounds.
+
+---
+
+## 13. Shooting System
+
+The player can shoot in any 2D direction using mouse aim.
+
+If using keyboard fallback, shooting is in the player’s facing direction.
+
+### Aim Vector
+
+Mouse aim:
+
+1. Convert mouse screen position to world position.
+2. Aim vector = mouse world position minus muzzle origin.
+3. Normalize aim vector.
+4. If aim vector length is near zero, use last facing direction.
+
+Keyboard fallback:
+
+- Aim vector = (1, 0) if facing right.
+- Aim vector = (-1, 0) if facing left.
+- Muzzle origin is adjusted for crouch height.
+
+### Muzzle Origin
+
+Muzzle origin is:
+
+- Player center X plus 14 px in aim direction, if aiming mostly horizontal.
+- Player center Y plus 2 px if standing.
+- Player center Y plus 8 px if crouching.
+
+The visual designer can offset the muzzle visually, but gameplay projectiles must originate from these positions.
+
+### Projectile General Rules
+
+All player and enemy projectiles:
+
+- Are circular hitboxes.
+- Move in straight lines unless affected by a stated special behavior.
+- Are destroyed on solid tile collision.
+- Have a lifetime.
+- Deal damage only to the intended target group.
+- Do not damage their owner.
+
+### Projectile Collision Order
+
+Each timestep, process projectiles in creation order:
+
+1. Move projectile.
+2. Check solid tile collision.
+3. Check target collision.
+4. Apply damage/knockback/special behavior.
+5. Remove projectile if lifetime expired, tile hit, or behavior destroyed it.
+
+---
+
+## 14. Weapons
+
+The player has 4 gun types.
+
+The weapons are permanent unlocks. Once unlocked, they are available in all future stages and replays.
+
+### Weapon Slots
+
+| Slot | Weapon | Unlock Stage |
+|---|---|---|
+| 1 | Chirp | Start |
+| 2 | Sifter | 1-2 |
+| 3 | Lance | 1-4 |
+| 4 | Bloom | 2-2 |
+
+### Weapon Switching
+
+- Selecting an unlocked weapon changes the active weapon.
+- Selecting a locked weapon does nothing except UI deny.
+- Switching weapons sets a universal shoot cooldown of **0.12 seconds**.
+- Weapon-specific fire cooldowns continue independently.
+
+---
+
+## 15. Weapon Details
+
+### 15.1 Chirp
+
+Role: Fast, reliable default weapon.
+
+| Parameter | Value |
+|---|---:|
+| Damage | 7 |
+| Fire interval | 0.15 seconds |
+| Projectile speed | 950 px/s |
+| Projectile lifetime | 0.7 seconds |
+| Projectile radius | 4 px |
+| Projectiles per shot | 1 |
+| Spread | 0 degrees |
+| Pierce | None |
+| Enemy knockback | 80 px/s |
+
+Best use:
+
+- General combat.
+- Medium distance.
+- Single enemies.
+
+---
+
+### 15.2 Sifter
+
+Role: Close-range crowd control.
+
+| Parameter | Value |
+|---|---:|
+| Damage per pellet | 4 |
+| Fire interval | 0.55 seconds |
+| Projectile speed | 720 px/s |
+| Projectile lifetime | 0.35 seconds |
+| Projectile radius | 3 px |
+| Projectiles per shot | 5 |
+| Spread angles | -8°, -4°, 0°, +4°, +8° |
+| Pierce | None |
+| Enemy knockback per pellet | 60 px/s |
+
+Best use:
+
+- Swarms.
+- Tight corridors.
+- Enemies at close range.
+
+---
+
+### 15.3 Lance
+
+Role: Piercing high single-target damage.
+
+| Parameter | Value |
+|---|---:|
+| Damage | 24 |
+| Fire interval | 0.62 seconds |
+| Projectile speed | 1500 px/s |
+| Projectile lifetime | 0.8 seconds |
+| Projectile radius | 5 px |
+| Projectiles per shot | 1 |
+| Spread | 0 degrees |
+| Pierce | 3 total enemies |
+| Enemy knockback | 260 px/s |
+
+Best use:
+
+- Groups in a line.
+- Bosses.
+- Ranged enemies.
+
+Pierce algorithm:
+
+- Lance projectile can hit up to 3 enemies total.
+- It stores the set of enemy IDs it has already hit.
+- On enemy hit:
+  - If enemy already in hit set, do nothing.
+  - Add enemy to hit set.
+  - Apply damage and knockback.
+  - If hit set size is less than 3, projectile continues.
+  - If hit set size is 3, projectile is destroyed.
+
+---
+
+### 15.4 Bloom
+
+Role: Area control and tight-space damage.
+
+| Parameter | Value |
+|---|---:|
+| Main damage | 12 |
+| Shard damage | 6 |
+| Fire interval | 1.0 second |
+| Main projectile speed | 520 px/s |
+| Main projectile lifetime | 0.45 seconds |
+| Main projectile radius | 8 px |
+| Shard speed | 620 px/s |
+| Shard lifetime | 0.5 seconds |
+| Shard radius | 4 px |
+| Shards produced | 3 |
+| Shard angles relative to main | -25°, 0°, +25° |
+| Split condition | On first enemy hit or after 0.45 seconds |
+| Main enemy knockback | 180 px/s |
+| Shard enemy knockback | 80 px/s |
+
+Best use:
+
+- Crowded rooms.
+- Enemies partially behind cover.
+- Boss pressure.
+
+Bloom algorithm:
+
+- Main projectile does not split on tile collision; it is destroyed.
+- If main projectile hits an enemy:
+  - Apply main damage.
+  - Destroy main projectile.
+  - Spawn 3 shards at the hit location.
+- If main projectile reaches lifetime without hitting an enemy:
+  - Destroy main projectile.
+  - Spawn 3 shards at its current position.
+- Shards do not split further.
+
+---
+
+## 16. Enemy System
+
+Enemies activate when the player enters their activation radius.
+
+### Activation Rules
+
+- Activation radius: 10 tiles.
+- Enemies do not act before activation.
+- Once activated, enemies remain active until they die or the stage ends.
+- Maximum active enemies per stage: 16.
+- If more than 16 are within radius, activate the 16 closest to the player.
+
+### Enemy Damage
+
+All enemy attacks deal **1 heart** to the player.
+
+### Enemy Line of Sight
+
+Ranged enemies require line of sight before attacking.
+
+LOS algorithm:
+
+- Sample the line between enemy attack point and player center every 4 pixels.
+- If any sample intersects a solid tile, LOS is blocked.
+- One-way platforms do not block LOS.
+
+---
+
+## 17. Enemy Roster
+
+### 17.1 Mite Crawler
+
+Type: Small ground swarm.
+
+| Parameter | Value |
+|---|---:|
+| Hitbox | 16 x 16 px |
+| HP | 4 |
+| Contact damage | 1 heart |
+| Move speed | 90 px/s |
+| Attack | Contact only |
+| World 2 HP | 5 |
+
+Behavior:
+
+- If player is within 5 tiles, move toward player.
+- Does not jump.
+- Stops and waits 0.5 seconds if blocked by solid geometry.
+- Dies to 1 Chirp shot.
+
+Stage use:
+
+- Tutorial enemies.
+- Swarm pressure.
+- Easy Sifter targets.
+
+---
+
+### 17.2 Dredge Drone
+
+Type: Flying shooter.
+
+| Parameter | Value |
+|---|---:|
+| Hitbox | 24 x 20 px |
+| HP | 10 |
+| Contact damage | 1 heart |
+| Move speed | 120 px/s |
+| Fire interval | 1.6 seconds |
+| Projectile speed | 350 px/s |
+| Projectile lifetime | 2.5 seconds |
+| Projectile radius | 6 px |
+| Attack range | 6 tiles |
+| World 2 HP | 12 |
+| World 2 projectile speed | 385 px/s |
+
+Behavior:
+
+- Patrols horizontally within 4 tiles of spawn.
+- Adds vertical sine offset of 12 px.
+- If player is within attack range and has LOS:
+  - Hover.
+  - Fire straight projectile toward player.
+- Collides with solid tiles but ignores one-way platforms.
+
+Stage use:
+
+- Aerial spacing.
+- Forces jump timing.
+- Good for Lance.
+
+---
+
+### 17.3 Pincer Bot
+
+Type: Melee charger.
+
+| Parameter | Value |
+|---|---:|
+| Hitbox | 24 x 24 px |
+| HP | 18 |
+| Contact damage | 1 heart |
+| Walk speed | 130 px/s |
+| Charge speed | 420 px/s |
+| Charge duration | 0.35 seconds |
+| Telegraph time | 0.5 seconds |
+| Attack range | 4 tiles |
+| Cooldown | 1.5 seconds |
+| World 2 HP | 21 |
+
+Behavior states:
+
+1. Idle:
+   - Wanders slowly near spawn.
+2. Telegraph:
+   - If player is within attack range and has LOS:
+     - Stop.
+     - Shake.
+     - Show charge telegraph.
+3. Charge:
+   - Dash toward player’s current position.
+   - Stop on solid collision or after charge duration.
+4. Cooldown:
+   - Cannot charge again until cooldown ends.
+
+Stage use:
+
+- Teaches reaction and spacing.
+- Punishes standing still.
+- Can be dodged by crouch or jump.
+
+---
+
+### 17.4 Warden Sentry
+
+Type: Stationary aimed turret.
+
+| Parameter | Value |
+|---|---:|
+| Hitbox | 32 x 32 px |
+| HP | 30 |
+| Contact damage | 1 heart |
+| Aim speed | 3 radians/second |
+| Burst shots | 2 |
+| Burst gap | 0.15 seconds |
+| Fire cooldown | 2.6 seconds |
+| Projectile speed | 520 px/s |
+| Projectile lifetime | 1.5 seconds |
+| Projectile radius | 6 px |
+| Attack range | 8 tiles |
+| World 2 HP | 35 |
+| World 2 projectile speed | 572 px/s |
+
+Behavior:
+
+- Stationary.
+- If player is within range and has LOS:
+  - Aim at player.
+  - When aim is within 10 degrees of player, fire 2-round burst.
+- If no LOS:
+  - Slowly return aim to last known angle.
+
+Stage use:
+
+- Forces movement and cover usage.
+- Good for Lance or Bloom.
+
+---
+
+### 17.5 Mist Wraith
+
+Type: Flying phasing enemy.
+
+| Parameter | Value |
+|---|---:|
+| Hitbox | 24 x 24 px |
+| HP | 22 |
+| Contact damage | 1 heart |
+| Move speed | 180 px/s |
+| Phase interval | 2.5 seconds |
+| Phase duration | 0.8 seconds |
+| Sine offset | 30 px |
+| World 2 HP | 25 |
+
+Behavior:
+
+- Flies toward player with vertical sine motion.
+- Collides with solid tiles but ignores one-way platforms.
+- Every 2.5 seconds:
+  - Becomes intangible for 0.8 seconds.
+  - While phased:
+    - Player projectiles pass through.
+    - Player contact does no damage.
+    - Enemy contact does no damage to player.
+  - Returns to normal.
+
+Stage use:
+
+- Teaches timing.
+- Rewards burst damage.
+- Good for Chirp and Lance timing.
+
+---
+
+### 17.6 Bolt Golem
+
+Type: Large slow armored enemy.
+
+| Parameter | Value |
+|---|---:|
+| Hitbox | 48 x 48 px |
+| HP | 60 |
+| Contact damage | 1 heart |
+| Move speed | 60 px/s |
+| Heavy bolt interval | 3.0 seconds |
+| Heavy bolt speed | 300 px/s |
+| Heavy bolt lifetime | 3.0 seconds |
+| Heavy bolt radius | 10 px |
+| Attack range | 8 tiles |
+| Stomp interval | 4.0 seconds |
+| Stomp range | 3 tiles |
+| World 2 HP | 69 |
+| World 2 heavy bolt speed | 330 px/s |
+
+Behavior:
+
+- Moves toward player if within 8 tiles.
+- Does not jump.
+- If player is within range and has LOS:
+  - Fires a heavy straight bolt toward player.
+- If player is within stomp range:
+  - Telegraph 0.4 seconds.
+  - Stomps.
+  - Spawns 2 temporary ground spike patches in front of itself for 2 seconds.
+- Drops 1 Signal Heart on death.
+
+Stage use:
+
+- Late-stage pressure.
+- Requires patience.
+- Good for Lance and Bloom.
+
+---
+
+## 18. Bosses
+
+### 18.1 Hush Warden
+
+Location: Stage 1-5.
+
+Boss role: World 1 guardian.
+
+| Parameter | Value |
+|---|---:|
+| HP | 180 |
+| Hitbox | 64 x 64 px |
+| Contact damage | 1 heart |
+| Boss projectile damage | 1 heart |
+| Arena size | 36 x 12 tiles |
+
+#### Hush Warden Phases
+
+Phase 1: 100% to 60% HP.
+
+Phase 2: 60% to 0% HP.
+
+#### Hush Warden Attacks
+
+**Charge**
+
+- Cooldown: 6 seconds.
+- Telegraph: 0.6 seconds.
+- Action:
+  - Boss dashes horizontally toward player at 480 px/s.
+  - Duration: 1.2 seconds.
+  - Leaves 4 spike patches along path.
+  - Spike patches last 3 seconds.
+
+**Fan Bolt**
+
+- Cooldown: 4 seconds.
+- Action:
+  - Fires 3 projectiles.
+  - Angles: -20°, 0°, +20°.
+  - Projectile speed: 380 px/s.
+  - Projectile lifetime: 2.0 seconds.
+
+**Phase 2 Changes**
+
+- Boss move speed increases by 10%.
+- New attack: **Sweep Beam**.
+  - Cooldown: 7 seconds.
+  - Telegraph: 0.8 seconds.
+  - Beam height: player Y.
+  - Beam width: 24 px.
+  - Beam duration: 0.7 seconds.
+  - Beam spans boss arena width.
+- New behavior: **Drone Summon**.
+  - Cooldown: 10 seconds.
+  - Summons 2 Dredge Drones.
+  - Maximum active Dredge Drones: 3.
+  - Summoned drones use normal Dredge Drone behavior.
+
+#### Hush Warden Death
+
+- Stop all attacks.
+- Play 2-second death sequence.
+- Boss hitbox becomes inactive.
+- Conduit unlocks.
+- Stage complete when player reaches Conduit.
+
+---
+
+### 18.2 Null Relay
+
+Location: Stage 2-5.
+
+Boss role: Final boss.
+
+| Parameter | Value |
+|---|---:|
+| HP | 300 |
+| Hitbox | 80 x 80 px |
+| Contact damage | 1 heart |
+| Boss projectile damage | 1 heart |
+| Beam damage | 1 heart |
+| Arena size | 40 x 15 tiles |
+
+#### Null Relay Phases
+
+Phase 1: 100% to 70% HP.  
+Phase 2: 70% to 35% HP.  
+Phase 3: 35% to 0% HP.
+
+#### Phase 1 Attacks
+
+**Rain**
+
+- Interval: 1.5 seconds.
+- Action:
+  - Spawns vertical projectiles from 3 columns.
+  - Projectile speed: 420 px/s downward.
+  - Projectile lifetime: 2.0 seconds.
+
+**Side Sweep**
+
+- Cooldown: 6 seconds.
+- Telegraph: 0.8 seconds.
+- Action:
+  - Horizontal beam at random Y.
+  - Beam width: 24 px.
+  - Beam duration: 0.8 seconds.
+  - Beam spans arena width.
+
+**Movement**
+
+- Moves horizontally at 60 px/s.
+
+#### Phase 2 Attacks
+
+Phase 2 begins with a 1.5-second warning.
+
+**Echo Shot**
+
+- Cooldown: 4 seconds.
+- Action:
+  - Fires 3 projectiles toward player.
+  - Projectile speed: 520 px/s.
+  - Projectiles bounce once off arena walls.
+  - Projectile lifetime: 2.0 seconds.
+
+**Wraith Summon**
+
+- Cooldown: 12 seconds.
+- Summons 2 Mist Wraiths.
+- Maximum active Mist Wraiths: 4.
+
+**Movement**
+
+- Moves in small zigzag.
+- Speed: 90 px/s.
+
+#### Phase 3 Attacks
+
+Phase 3 begins with a 1.5-second warning.
+
+**Overload Cycle**
+
+The boss repeats this cycle until death.
+
+1. Horizontal beam:
+   - Telegraph: 0.6 seconds.
+   - Duration: 0.6 seconds.
+2. Vertical beam:
+   - Telegraph: 0.6 seconds.
+   - Duration: 0.6 seconds.
+3. Core Exposed:
+   - Boss becomes stationary.
+   - Duration: 1.5 seconds.
+   - All player damage to boss is multiplied by 1.5.
+   - Boss cannot attack.
+
+#### Null Relay Death
+
+- Stop all attacks.
+- Play 3-second death sequence.
+- Show end state after player reaches Conduit or automatically after death sequence if Conduit is active.
+
+---
+
+## 19. Stage Objects
+
+### 19.1 Conduit
+
+Required stage exit.
+
+- Size: 64 x 96 px.
+- Non-boss stages:
+  - Activates when player overlaps it.
+- Boss stages:
+  - Inactive until boss dies.
+  - Activates when player overlaps it after boss death.
+- On activation:
+  - Stop player input.
+  - Play stage complete sequence.
+  - Show Stage Summary or End state.
+
+### 19.2 Checkpoint
+
+- Size: 32 x 48 px.
+- Triggers once when player overlaps.
+- Sets respawn point.
+- Restores 1 heart if below max.
+- Visual and audio feedback.
+
+### 19.3 Core
+
+- Size: 24 x 24 px.
+- Optional.
+- 3 per stage.
+- Once collected, global flag persists.
+- On stage load or retry, already collected cores are not spawned.
+- HUD updates total cores.
+
+### 19.4 Signal Heart
+
+- Size: 24 x 24 px.
+- Collects only if player hearts are below 5.
+- If player hearts are already 5, the heart remains in the world.
+- Restores 1 heart.
+
+### 19.5 Tuner Shard
+
+- Size: 32 x 48 px.
+- Unlocks one weapon.
+- Once collected, weapon unlock persists globally.
+- On stage load or retry, already collected tuners are not spawned.
+- Shows unlock notification.
+
+---
+
+## 20. Stage Content
+
+### 20.1 World 1: Sumpworks
+
+World 1 difficulty modifier:
+
+- None.
+
+World 1 enemy HP uses base values.
+
+---
+
+### Stage 1-1: First Current
+
+Stage purpose: Teach movement, crouching, jumping, and shooting.
+
+Size: 75 x 12 tiles.
+
+Layout:
+
+- 0 to 15: Flat start area.
+- 15 to 25: First spike cluster.
+- 25 to 30: Open corridor.
+- 30 to 42: Low ceiling passage requiring crouch.
+- 42 to 48: Small gap.
+- 48 to 55: One-way platform above gap.
+- 55 to 65: Drone encounter.
+- 65 to 70: Small pit with mid platform.
+- 70 to 75: Conduit area.
+
+Systems introduced:
+
+- Move left/right.
+- Jump.
+- Crouch.
+- Shoot.
+- One-way platform.
+- Spike.
+- Pit.
+
+Enemies:
+
+- Mite Crawler x3:
+  - 2 near tile 25.
+  - 1 near tile 55.
+- Dredge Drone x1:
+  - Near tile 60.
+
+Pickups:
+
+- Core 1: Side alcove near tile 10.
+- Core 2: Inside low ceiling passage.
+- Core 3: High ledge above gap.
+- Signal Heart: After checkpoint near tile 65.
+
+Checkpoints:
+
+- Tile 40.
+
+Exit:
+
+- Conduit at tile 70.
+
+---
+
+### Stage 1-2: Dredge Run
+
+Stage purpose: Introduce moving platforms and conveyors. Unlock Sifter.
+
+Size: 95 x 12 tiles.
+
+Layout:
+
+- 0 to 15: Start area.
+- 20 to 35: Moving platforms over 8-tile pit.
+- 35 to 50: Conveyor belt.
+- 50 to 70: Drone corridor with low cover.
+- 70 to 80: Pincer room.
+- 80 to 90: Second moving platform section.
+- 90 to 95: Conduit area.
+
+Systems introduced:
+
+- Moving platforms.
+- Conveyor belt.
+- More pit usage.
+
+Enemies:
+
+- Dredge Drone x3:
+  - Tiles 50, 60, 70.
+- Mite Crawler x4:
+  - Tiles 55, 60, 72, 78.
+- Pincer Bot x1:
+  - Tile 72.
+
+Pickups:
+
+- Core 1: Top of first moving platform.
+- Core 2: Spike corridor under conveyor.
+- Core 3: High ledge before conduit.
+- Signal Heart: After checkpoint.
+- Tuner Shard: Tile 85. Unlocks Sifter.
+
+Checkpoints:
+
+- Tile 45.
+
+Exit:
+
+- Conduit at tile 92.
+
+---
+
+### Stage 1-3: Pressure Lock
+
+Stage purpose: Introduce Warden Sentry and one-way vertical pressure.
+
+Size: 90 x 14 tiles.
+
+Layout:
+
+- 0 to 10: Start area.
+- 10 to 20: Short vertical shaft with one-way platforms.
+- 20 to 35: Low ceiling corridor.
+- 35 to 50: Sentry alcove.
+- 50 to 65: Vertical moving pistons.
+- 65 to 75: Pincer room.
+- 75 to 85: Second sentry section.
+- 85 to 90: Conduit area.
+
+Systems introduced:
+
+- Warden Sentry.
+- Vertical one-way platforms.
+- More spike placement.
+
+Enemies:
+
+- Warden Sentry x2:
+  - Tiles 45 and 80.
+- Pincer Bot x3:
+  - Tiles 68, 72, 76.
+- Dredge Drone x2:
+  - Tiles 20 and 55.
+
+Pickups:
+
+- Core 1: High ledge in vertical shaft.
+- Core 2: Behind low corridor.
+- Core 3: On moving piston path.
+- Signal Heart: Tile 55.
+
+Checkpoints:
+
+- Tile 35.
+- Tile 60.
+
+Exit:
+
+- Conduit at tile 88.
+
+---
+
+### Stage 1-4: Rust Gallery
+
+Stage purpose: Emphasize crouching and long-range shooting. Unlock Lance.
+
+Size: 105 x 12 tiles.
+
+Layout:
+
+- 0 to 15: Start area.
+- 15 to 35: Long low ceiling gallery.
+- 35 to 50: Drone gap.
+- 50 to 65: Moving platforms.
+- 65 to 80: Conveyor and spike run.
+- 80 to 95: Pincer charge corridor.
+- 95 to 105: Conduit area.
+
+Systems introduced:
+
+- Extended crouch sections.
+- More drone pressure.
+- Lance unlock.
+
+Enemies:
+
+- Dredge Drone x4:
+  - Tiles 30, 40, 55, 85.
+- Pincer Bot x4:
+  - Tiles 70, 80, 90, 95.
+- Mite Crawler x4:
+  - Tiles 35, 50, 65, 80.
+
+Pickups:
+
+- Core 1: Inside long low ceiling.
+- Core 2: Above moving platforms.
+- Core 3: Behind conveyor spike run.
+- Signal Heart: Tile 70.
+- Tuner Shard: Tile 98. Unlocks Lance.
+
+Checkpoints:
+
+- Tile 40.
+- Tile 75.
+
+Exit:
+
+- Conduit at tile 102.
+
+---
+
+### Stage 1-5: Hush Warden
+
+Stage purpose: World 1 boss.
+
+Size: 60 x 12 tiles.
+
+Layout:
+
+- 0 to 25: Short gauntlet.
+- 25 to 30: Checkpoint.
+- 30 to 58: Boss arena.
+- 58 to 60: Conduit area.
+
+Gauntlet layout:
+
+- Spike patch near tile 15.
+- Sentry alcove near tile 20.
+- Two Mite Crawlers near tile 24.
+
+Boss arena layout:
+
+- Flat floor.
+- Two side ledges for vertical dodging.
+- No moving platforms during boss.
+- No off-screen hazards.
+
+Enemies:
+
+- Warden Sentry x1:
+  - Tile 20.
+- Mite Crawler x2:
+  - Tile 24.
+- Hush Warden:
+  - Center of arena.
+
+Pickups:
+
+- Core 1: Side alcove before boss.
+- Core 2: High side ledge in arena.
+- Core 3: Appears above center during Phase 2 safe window.
+- Signal Heart: After checkpoint.
+
+Checkpoints:
+
+- Tile 30, before boss.
+
+Exit:
+
+- Conduit locked until Hush Warden dies.
+
+---
+
+### 20.2 World 2: Skyloom
+
+World 2 difficulty modifier:
+
+- Standard enemy HP multiplied by 1.15, rounded up.
+- Standard enemy projectile speed multiplied by 1.1.
+- Bosses use their defined HP and projectile speeds without additional modifiers.
+
+World 2 introduces more verticality and wind.
+
+---
+
+### Stage 2-1: Lifted Bazaar
+
+Stage purpose: Introduce vertical climbing and updrafts. Introduce Mist Wraith.
+
+Size: 80 x 20 tiles.
+
+Layout:
+
+- Bottom start area: vertical tiles 0 to 8.
+- Updraft column: vertical tiles 10 to 20.
+- One-way market shelves: vertical tiles 20 to 35.
+- Drone corridor: vertical tiles 35 to 45.
+- Mid checkpoint: vertical tile 45.
+- Wraith ledges: vertical tiles 50 to 60.
+- Narrow top section: vertical tiles 60 to 70.
+- Conduit at top: vertical tile 72.
+
+Systems introduced:
+
+- Updraft.
+- More vertical one-way platforms.
+- Mist Wraith.
+
+Enemies:
+
+- Dredge Drone x3:
+  - Vertical tiles 35, 40, 45.
+- Mist Wraith x2:
+  - Vertical tiles 52 and 58.
+- Pincer Bot x2:
+  - Vertical tiles 25 and 60.
+
+Pickups:
+
+- Core 1: Inside updraft column.
+- Core 2: Hidden side shelf.
+- Core 3: High ledge before conduit.
+- Signal Heart: Mid checkpoint area.
+
+Checkpoints:
+
+- Vertical tile 45.
+
+Exit:
+
+- Conduit at top.
+
+---
+
+### Stage 2-2: Market Veils
+
+Stage purpose: Introduce horizontal wind gusts and complex one-way shelf loops. Unlock Bloom.
+
+Size: 105 x 16 tiles.
+
+Layout:
+
+- 0 to 15: Start area.
+- 20 to 30: Left-push wind over 6-tile pit.
+- 30 to 50: One-way market shelves.
+- 50 to 65: Sentry row.
+- 65 to 85: Vertical loop with one-way platforms.
+- 85 to 95: Wraith corridor.
+- 95 to 105: Conduit area.
+
+Systems introduced:
+
+- Horizontal wind gust.
+- More Sentry pressure.
+- Bloom unlock.
+
+Enemies:
+
+- Warden Sentry x3:
+  - Tiles 55, 60, 65.
+- Mist Wraith x4:
+  - Tiles 70, 75, 85, 90.
+- Mite Crawler x4:
+  - Tiles 35, 40, 80, 85.
+
+Pickups:
+
+- Core 1: Inside wind gust.
+- Core 2: Top of vertical loop.
+- Core 3: Low crouch under shelf.
+- Signal Heart: Mid-stage.
+- Tuner Shard: Tile 95. Unlocks Bloom.
+
+Checkpoints:
+
+- Tile 45.
+
+Exit:
+
+- Conduit at tile 100.
+
+---
+
+### Stage 2-3: Windrace
+
+Stage purpose: Introduce Bolt Golem and stronger wind pressure.
+
+Size: 120 x 14 tiles.
+
+Layout:
+
+- 0 to 15: Start area.
+- 20 to 30: Right-push wind.
+- 30 to 50: Moving platforms.
+- 50 to 70: Sentry and Wraith mixed section.
+- 70 to 85: Strong left-push wind.
+- 85 to 100: Golem chamber.
+- 100 to 115: Final run.
+- 115 to 120: Conduit area.
+
+Systems introduced:
+
+- Strong horizontal wind.
+- Bolt Golem.
+- Timed moving platforms under wind.
+
+Enemies:
+
+- Warden Sentry x3:
+  - Tiles 55, 60, 90.
+- Mist Wraith x4:
+  - Tiles 50, 75, 85, 95.
+- Bolt Golem x2:
+  - Tiles 90 and 100.
+
+Pickups:
+
+- Core 1: Inside strong wind zone.
+- Core 2: On moving platform.
+- Core 3: Side chamber near golem area.
+- Signal Heart: Tile 75.
+
+Checkpoints:
+
+- Tile 40.
+- Tile 80.
+
+Exit:
+
+- Conduit at tile 115.
+
+---
+
+### Stage 2-4: Highspire Ascent
+
+Stage purpose: Final non-boss stage. High vertical pressure.
+
+Size: 80 x 24 tiles.
+
+Layout:
+
+- Bottom start: vertical tiles 0 to 8.
+- Updraft: vertical tiles 10 to 18.
+- Narrow ledges: vertical tiles 18 to 35.
+- Golem ledge: vertical tiles 35 to 45.
+- Mid checkpoint: vertical tile 45.
+- Crosswind section: vertical tiles 50 to 65.
+- Wraith shaft: vertical tiles 65 to 75.
+- Conduit: vertical tile 78.
+
+Systems introduced:
+
+- More vertical Sentry placement.
+- Golem pressure on ledges.
+- More wind interaction.
+
+Enemies:
+
+- Warden Sentry x4:
+  - Vertical tiles 20, 30, 45, 60.
+- Bolt Golem x2:
+  - Vertical tiles 35 and 50.
+- Mist Wraith x6:
+  - Vertical tiles 25, 40, 55, 65, 70, 75.
+
+Pickups:
+
+- Core 1: Hidden ledge.
+- Core 2: Inside updraft.
+- Core 3: High ledge before conduit.
+- Signal Heart: Mid checkpoint.
+
+Checkpoints:
+
+- Vertical tile 45.
+- Vertical tile 60.
+
+Exit:
+
+- Conduit at top.
+
+---
+
+### Stage 2-5: Null Relay
+
+Stage purpose: Final boss and game completion.
+
+Size: 70 x 15 tiles.
+
+Layout:
+
+- 0 to 20: Short gauntlet.
+- 20 to 30: Checkpoint.
+- 30 to 65: Boss arena.
+- 65 to 70: End area.
+
+Gauntlet layout:
+
+- Spike patch near tile 10.
+- Mist Wraiths near tiles 15 and 18.
+- Bolt Golem near tile 20.
+
+Boss arena layout:
+
+- Wide floor.
+- Two side ledges.
+- No moving platforms during boss.
+- No off-screen hazards.
+
+Enemies:
+
+- Mist Wraith x2:
+  - Tiles 15 and 18.
+- Bolt Golem x1:
+  - Tile 20.
+- Null Relay:
+  - Center of arena.
+
+Pickups:
+
+- Core 1: Pre-boss alcove.
+- Core 2: Side ledge in arena.
+- Core 3: Appears during Phase 3 Core Exposed window.
+- Signal Heart: After checkpoint.
+
+Checkpoints:
+
+- Tile 30, before boss.
+
+Exit:
+
+- Conduit locked until Null Relay dies.
+- After Null Relay death and Conduit interaction, go to End state.
+
+---
+
+## 21. Progression System
+
+### Weapon Progression
+
+Weapons are permanent unlocks.
+
+| Unlock | Stage | Weapon |
+|---|---|---|
+| Start | — | Chirp |
+| Stage 1-2 | Tuner Shard | Sifter |
+| Stage 1-4 | Tuner Shard | Lance |
+| Stage 2-2 | Tuner Shard | Bloom |
+
+### Stage Unlocking
+
+- Stage 1-1 is always unlocked at New Signal.
+- Completing a stage unlocks the next stage.
+- Completing 1-5 unlocks World 2.
+- Completing 2-5 completes the game.
+- Completed stages can be replayed from Signal Map.
+
+### Core Progression
+
+- 3 cores per stage.
+- 30 total cores.
+- Cores are optional.
+- Cores persist once collected.
+- Cores do not affect gameplay outside stats.
+
+### Life Progression
+
+- Lives reset to 3 at the start of each stage.
+- Lives do not carry between stages.
+- This keeps progression smooth and prevents long-stage death spirals.
+
+---
+
+## 22. Difficulty Curve
+
+### World 1
+
+- Teaches core systems.
+- Enemies have base HP.
+- Hazards are predictable.
+- Boss has 180 HP.
+
+### World 2
+
+- Standard enemy HP x1.15.
+- Standard enemy projectile speed x1.1.
+- More vertical movement.
+- More wind interference.
+- More ranged pressure.
+- Boss has 300 HP and more complex attacks.
+
+### Fairness Rules
+
+- No unavoidable damage.
+- Boss attacks have telegraphs.
+- No enemy attacks from off-screen without warning.
+- No hazards activate without visible or audible cue.
+- Checkpoints are placed before major hazard or boss sections.
+- Gaps are never wider than 4 tiles.
+- Jump height is sufficient to cross all required gaps.
+
+---
+
+## 23. HUD
+
+The HUD is minimal and readable.
+
+### In-Stage HUD
+
+#### Top Left
+
+- Heart icons: 5 icons.
+- Weapon slots: 4 slots.
+  - Active slot highlighted.
+  - Unlocked weapons visible.
+  - Locked weapons greyed out.
+  - Slot numbers 1 through 4.
+
+#### Top Right
+
+- Stage label:
+  - Example: `W1 · N3`
+- Core counter:
+  - Total collected cores.
+  - Example: `Cores 12/30`
+- Pause icon.
+
+#### Top Center
+
+- Boss health bar only during boss fight.
+- Shows boss name.
+- Shows boss HP as a bar.
+
+#### Bottom Center
+
+- Notification area.
+- Shows temporary messages:
+  - Checkpoint.
+  - Weapon unlock.
+  - Boss phase warning.
+  - Core collected, if desired.
+
+#### Edge Objectives
+
+- If Conduit is off-screen, show a small arrow at the screen edge pointing toward it.
+- Arrow is subtle and does not cover gameplay.
+
+### First Stage Control Hint
+
+Stage 1-1 only:
+
+- Bottom text:
+  - `A/D move`
+  - `W jump`
+  - `S crouch`
+  - `Mouse shoot`
+- Disappears after 10 seconds or first successful jump.
+
+### Damage Feedback
+
+- Red vignette flash on damage.
+- Player sprite flickers during invulnerability.
+- Heart icon pulses lost heart.
+
+### Boss HUD
+
+- Boss name.
+- Boss HP bar.
+- Boss phase warning text:
+  - “Phase”
+  - “Overload”
+- Beam telegraphs are part of the world, not HUD.
+
+---
+
+## 24. Audio Requirements
+
+Audio design is handled by another agent, but these events require distinct audio cues.
+
+| Event | Audio Requirement |
+|---|---|
+| Title confirm | UI confirm. |
+| Stage start | Stage start sting. |
+| Player jump | Quick jump cue. |
+| Player land | Soft land cue. |
+| Chirp fire | Fast light shot. |
+| Sifter fire | Short spread shot. |
+| Lance fire | Deeper piercing shot. |
+| Bloom fire | Heavy pulse. |
+| Bloom split | Small burst. |
+| Enemy hit | Impact cue. |
+| Enemy death | Distinct death per enemy type. |
+| Player hurt | Hurt cue. |
+| Player death | Deeper death cue. |
+| Checkpoint | Positive confirmation. |
+| Core collected | Bright pickup. |
+| Heart collected | Warm pickup. |
+| Tuner unlock | Major unlock cue. |
+| Boss warning | Warning cue. |
+| Boss phase change | Phase cue. |
+| Boss death | Large resolution cue. |
+| Conduit complete | Stage complete cue. |
+| Pause in/out | UI cue. |
+
+---
+
+## 25. Algorithm Summary
+
+### Game Loop
+
+Use fixed timestep.
+
+- Target update rate: 60 updates per second.
+- `dt = 1 / 60`
+- Accumulate frame time.
+- Clamp frame delta to 0.1 seconds.
+- Update in fixed steps.
+- Render after updates.
+
+### Player Update Order
+
+1. Read input.
+2. Update facing.
+3. Update weapon.
+4. Update movement.
+5. Apply wind/conveyor.
+6. Integrate and collide.
+7. Update player projectiles.
+8. Update enemy projectiles.
+9. Update enemies.
+10. Update hazards.
+11. Update pickups.
+12. Update checkpoint/exit triggers.
+13. Update camera.
+14. Update HUD.
+
+### Projectile Update Order
+
+1. Move projectile.
+2. Check solid tile.
+3. Check target collision.
+4. Apply behavior.
+5. Remove if expired.
+
+### Enemy Update Order
+
+1. Check activation.
+2. Run state machine.
+3. Apply movement.
+4. Apply collision.
+5. Check attack conditions.
+6. Spawn enemy projectiles.
+7. Check death.
+
+### Boss Update Order
+
+1. Check phase threshold.
+2. Run boss state machine.
+3. Apply movement.
+4. Apply collision.
+5. Check attack conditions.
+6. Spawn projectiles/beams/summons.
+7. Check death.
+
+---
+
+## 26. Entity Limits
+
+To maintain performance:
+
+- Maximum active enemies per stage: 16.
+- Maximum player projectiles: 80.
+- Maximum enemy projectiles: 120.
+- Maximum temporary spike patches: 20.
+- Maximum active summoned enemies during boss: 4.
+
+If limits are exceeded:
+
+- Oldest projectile expires.
+- Farthest enemy beyond activation radius stops acting until space is available.
+
+---
+
+## 27. Stage Reset Rules
+
+On stage retry or Game Over retry:
+
+- Player position resets to stage start.
+- Hearts reset to 5.
+- Lives reset to 3.
+- Checkpoints reset.
+- Enemies reset.
+- Enemy projectiles reset.
+- Moving platforms reset.
+- Wind zones reset.
+- Boss resets if present.
+- Uncollected stage Cores remain uncollected.
+- Already globally collected Cores remain collected.
+- Already globally unlocked weapons remain unlocked.
+- Already globally collected Tuners remain collected.
+
+---
+
+## 28. Edge Cases
+
+### No Checkpoint Activated
+
+- On death or pit, respawn at stage start.
+
+### Pit While Full Hearts
+
+- Lose 1 heart.
+- Respawn at checkpoint.
+
+### Pit While 1 Heart
+
+- Lose 1 heart.
+- Trigger death.
+- Respawn or Game Over based on lives.
+
+### Weapon Switch While Firing
+
+- Allow switch.
+- Universal switch cooldown prevents immediate fire.
+
+### Selecting Locked Weapon
+
+- No weapon change.
+- UI deny.
+
+### Player Dies During Boss
+
+- If lives remain:
+  - Respawn at checkpoint before boss.
+  - Boss resets to full HP and idle.
+- If lives are 0:
+  - Game Over.
+  - Retry resets stage.
+
+### Player Reaches Conduit While Dead
+
+- Cannot happen.
+- Conduit trigger only checks if player is alive.
+
+### Boss Projectile During Player Invulnerability
+
+- Projectile passes through player.
+- No damage.
+
+### Enemy Contact During Player Invulnerability
+
+- No damage.
+
+### Enemy Dying to Multiple Projectiles Same Frame
+
+- First projectile applies damage.
+- If enemy dies, remaining projectiles do not apply damage to that enemy.
+
+### Bloom Splitting Inside Wall
+
+- If main projectile hits a solid tile, it does not split.
+- If main projectile reaches lifetime inside open space, it splits.
+
+### Lance Piercing Multiple Enemies at Same Position
+
+- Lance uses enemy ID set.
+- It cannot hit the same enemy twice.
+- It can hit distinct enemies at overlapping positions.
+
+### Mouse Leaves Window While Shooting
+
+- Shooting stops.
+- Aim remains last known mouse position.
+
+### Keyboard-Only Fallback
+
+- J shoots in facing direction.
+- Facing is set by last horizontal input.
+- If no horizontal input has occurred, face right.
+
+### Pause During Boss
+
+- All timers stop.
+- Boss state machine pauses.
+- Projectiles pause.
+- HUD shows pause menu.
+
+### Pause During Stage Summary or Game Over
+
+- Not available.
+- Pause is only active during Stage state.
+
+### Progress Storage
+
+- If browser storage is available, store:
+  - Completed stages.
+  - Unlocked stages.
+  - Unlocked weapons.
+  - Collected cores.
+  - Total time.
+  - Total deaths.
+- If storage is unavailable:
+  - Progress exists for the session only.
+  - Title should still allow New Signal and Continue within the current session.
+
+---
+
+## 29. Intentionally Excluded Systems
+
+To keep the game tight, the following are excluded:
+
+- No double jump.
+- No wall jump.
+- No roll.
+- No score system.
+- No enemy drops except Bolt Golem Signal Heart.
+- No armor power-up.
+- No health overcap.
+- No weapon upgrades.
+- No level select before the current stage is unlocked.
+- No touch controls.
+- No 3D gameplay.
+- No Z-axis depth.
+- No camera rotation.
+- No par time or star rating.
+- No side characters outside story text.
+- No shops.
+- No crafting.
+- No permanent death.
+
+---
+
+## 30. Key Design Decisions and Rationale
+
+### Why 2D?
+
+2D keeps collision, aiming, and platforming predictable. It matches the side-scrolling request and avoids depth-related confusion.
+
+### Why Mouse Aim?
+
+Mouse aim makes the 4 weapons mechanically distinct. Spread, piercing, and splitting behave differently depending on direction and stage layout.
+
+### Why No Double Jump?
+
+Double jump would widen required gaps and reduce the importance of crouching and timing. A single jump keeps platforming legible.
+
+### Why Permanent Weapon Unlocks?
+
+Permanent unlocks reward progression and let the player choose tactics without repeated backtracking. They also make the 4-gun requirement meaningful across the whole game.
+
+### Why No Score?
+
+Score would encourage risky behavior unrelated to completion. Cores provide optional completion value without creating a high-score pressure loop.
+
+### Why 3 Lives per Stage?
+
+Stage-level lives prevent a single long stage from becoming a full-game punishment. The player can recover, but repeated failure still triggers Game Over.
+
+### Why Cores Are Optional?
+
+Cores reward exploration without blocking story progression. They give replay value without forcing the player to chase risky pickups.
+
+### Why 2 Worlds and 5 Stages Each?
+
+This provides a clear Mario-like structure while staying compact enough to complete in one session. It also lets World 2 increase difficulty through wind, verticality, and stronger enemies.
+
+### Why Crouch Is a Core Action?
+
+Crouch gives the player a third vertical movement state without adding a jump variant. It is used for low ceilings, dodge positioning, and weapon muzzle height.
+
+### Why Bosses Reset on Death?
+
+Boss reset makes checkpoints meaningful and prevents the player from losing a full boss fight because of one death. It keeps pacing smooth.
+
+---
+
+## 31. Final Completion Definition
+
+The game is complete when:
+
+- The player can start from Title.
+- The player can play all 10 stages.
+- The player can unlock all 4 weapons.
+- The player can defeat both bosses.
+- The player can collect all 30 Cores optionally.
+- The player can reach the End state after Stage 2-5.
+- The player can replay any completed stage from Signal Map.
+- All damage, death, checkpoint, pit, pause, retry, and boss reset cases work.
+</gameplay.md>
+
+The visual designer's visual.md is:
+<visual.md>
+# visual.md
+
+## 0. Document Purpose and Authority
+
+This is the complete visual, UX, presentation, and audio design for **Signal Courier**.
+
+Another agent will integrate this game using only this file for:
+
+- Dimensionality and presentation.
+- Art style.
+- UI and HUD.
+- Entity appearance.
+- VFX.
+- World/stage visual identity.
+- Music.
+- Sound effects.
+- Presentation UX.
+
+If this document conflicts with `gameplay.md` on **mechanics, numbers, states, or rules**, `gameplay.md` remains authoritative.
+
+If this document conflicts with `gameplay.md` on **appearance, readability, UI, audio, or presentation**, this document is authoritative.
+
+Important principle:
+
+> Visuals must make the gameplay easier to read, not decorate it into obscurity.
+
+---
+
+## 1. Dimensionality
+
+The game is **2D gameplay** with **2.5D presentation**.
+
+### 1.1 Gameplay Plane
+
+- All gameplay occurs on a single 2D plane.
+- Positive X is right.
+- Positive Y is down.
+- No Z-axis gameplay.
+- No 3D aiming.
+- No camera rotation.
+- No gameplay depth.
+- Collision, movement, shooting, and camera are strictly 2D.
+
+### 1.2 Presentation Depth
+
+The world may use **parallax background layers** to create depth, but parallax is presentation only.
+
+Background layers do not create gameplay depth.
+
+Parallax must not imply that the player can move into or out of the screen.
+
+### 1.3 Logical Viewport
+
+- Logical viewport: **960 x 540**.
+- Scale to fit screen while preserving aspect ratio.
+- Prefer integer or clean fractional scaling where available.
+- All visual measurements in this document are in logical pixels at **960 x 540**.
+
+### 1.4 Layer Stack
+
+Render layers in this order:
+
+| Layer | Content | X Parallax | Y Parallax | Notes |
+|---:|---|---:|---:|---|
+| 0 | Sky / gradient | 0.0 | 0.0 | Static or very slow vertical interpolation only. |
+| 1 | Far silhouette | 0.12 | 0.04 | Distant pipes, spires, market frames. |
+| 2 | Mid structures | 0.28 | 0.10 | Pipes, catwalks, shelves, clouds. |
+| 3 | Near props | 0.55 | 0.19 | Non-interactive props, lamps, cloth, cables. |
+| 4 | Gameplay layer | 1.0 | 1.0 | Tiles, player, enemies, projectiles, pickups. |
+| 5 | VFX layer | 1.0 | 1.0 | Sparks, beams, particles, telegraphs. |
+| 6 | HUD layer | 0.0 | 0.0 | UI, HUD, notifications. |
+
+### 1.5 Foreground Rule
+
+There is no gameplay-occluding foreground.
+
+Optional screen-edge framing may exist, but:
+
+- It may not cover more than **80 px** on any side.
+- It may not cover the center of the screen.
+- It may not obscure projectiles, enemies, hazards, or the player.
+- It must not create fake depth.
+
+Why:
+
+> Any foreground object can accidentally hide a projectile or spike. The game is designed around safe, readable challenge.
+
+---
+
+## 2. Visual Identity
+
+Working title:
+
+# **SIGNAL COURIER**
+
+Player:
+
+# **Courier Jex**
+
+Core visual theme:
+
+> A dying industrial city being re-awakened by signal light.
+
+The style is:
+
+- **Rust-circuit industrial.**
+- **Flat-shaded vector presentation.**
+- **High-contrast silhouettes.**
+- **Limited palette.**
+- **Emissive signal accents.**
+- **No photographic realism.**
+- **No anime style.**
+- **No heavy 3D rendering.**
+- **No hand-painted clutter.**
+- **No Mario-like pipes, coins, mushrooms, castles, or flagpoles.**
+
+The world should feel like a maintenance city under emergency signal control:
+
+- Rust.
+- Steel.
+- Cables.
+- Maintenance drones.
+- Conveyors.
+- Canals.
+- Floating market platforms.
+- Signal beacons.
+- Industrial warning shapes.
+
+The emotional arc:
+
+- **World 1:** cold, wet, rusty, oppressive.
+- **World 2:** brighter, airy, wind-swept, but more exposed.
+- **End:** the city’s signal network wakes up in coherent cyan/white light.
+
+---
+
+## 3. Global Color System
+
+The palette is deliberately limited so that color always means something.
+
+### 3.1 Core Palette
+
+| Name | Hex | Use |
+|---|---:|---|
+| Void Dark | `#0B1017` | Backgrounds, shadows, UI backgrounds. |
+| Deep Steel | `#1C2530` | Mid-background panels, walls. |
+| Steel | `#3A4856` | Neutral structures. |
+| Rust Dark | `#7A3E33` | World 1 metal, pipes. |
+| Rust Light | `#B86B4F` | Rust highlights, enemy armor. |
+| Oil Teal | `#2E5F5A` | World 1 canal water, wet metal. |
+| Water Dark | `#153136` | Pits, canal depths. |
+| Signal Cyan | `#4BE2FF` | Player, checkpoints, conduit, active UI. |
+| Signal White | `#F5FBFF` | Cores, highlights, beam cores. |
+| Signal Amber | `#FFB347` | Tuners, collectible accents, Sifter, warnings. |
+| Danger Red | `#FF4F5A` | Enemy damage, spikes, boss, danger. |
+| Warning Orange | `#FF8B3D` | Enemy projectiles, telegraphs. |
+| Heart Pink | `#FF7D9B` | Signal hearts, warm pickups. |
+| UI Neutral | `#D7DDE4` | Text, inactive UI. |
+| UI Dark | `#303841` | Locked UI, disabled slots. |
+
+### 3.2 Color Semantics
+
+These meanings must be consistent across the entire game.
+
+| Color | Meaning |
+|---|---|
+| Cyan | Player, safe signal, active systems, checkpoints, conduit, active UI. |
+| White | Pure signal, cores, beam centers, high-value highlights. |
+| Amber | Collectibles, tuners, Sifter, special weapon energy, mild warnings. |
+| Red / Orange | Enemy attacks, damage, hazards, boss energy, locked objectives. |
+| Neutral steel / rust | Environment. |
+| Pink | Health. |
+
+Why:
+
+> The player should be able to identify danger, safety, and collectibles from color alone, even when shapes are small or motion is fast.
+
+### 3.3 Contrast Rules
+
+- Enemy projectiles must always have a **white or bright core**.
+- Player projectiles must be visually distinct from enemy projectiles.
+- Spikes must never match the color of the floor they sit on.
+- One-way platforms must have a brighter top edge than the background.
+- Boss telegraphs must be visible against both World 1 and World 2 backgrounds.
+- Minimum gameplay readability brightness: background areas should not drop below roughly `#121820` behind gameplay.
+
+Why:
+
+> Dark industrial mood is desirable, but if a projectile can be missed because the background is too dark, the visual design has failed.
+
+---
+
+## 4. Typography and UI Grammar
+
+### 4.1 Type Direction
+
+Use a **condensed technical sans-serif** feel.
+
+If custom fonts are not available, use a fallback stack:
+
+```css
+"Chakra Petch", "Rajdhani", "Bahnschrift", "Arial Narrow", sans-serif
+```
+
+For numbers and counters, prefer a monospace or tabular numeric feel:
+
+```css
+"JetBrains Mono", "Consolas", "Courier New", monospace
+```
+
+### 4.2 Type Sizes at 960 x 540
+
+| Use | Size |
+|---|---:|
+| Title logo | 64 px |
+| World label | 28 px |
+| Main menu button | 24 px |
+| HUD text | 16 px |
+| Notification text | 18 px |
+| Stage name card | 40 px |
+| Small UI text | 12 px |
+
+### 4.3 UI Shape Grammar
+
+All UI panels use:
+
+- 6 px corner radius.
+- 2 px border.
+- Dark translucent background: `#0B1017` at 82% opacity.
+- Primary border: `#4BE2FF`.
+- Secondary border: `#3A4856`.
+- Danger border: `#FF4F5A`.
+- Text: `#D7DDE4`, unless highlighted.
+
+Buttons:
+
+- Default: dark panel, neutral border.
+- Hover: cyan border, white text, 1 px upward shift.
+- Confirm: 80 ms white flash.
+- Deny: red border, 0.15 s horizontal shake, low deny sound.
+
+Why:
+
+> A single UI grammar keeps title, map, pause, summary, and game over feeling like one coherent signal system.
+
+---
+
+## 5. State-by-State UX
+
+## 5.1 Title
+
+### Layout
+
+- Center-left menu.
+- Large logo center or upper-center.
+- Animated background.
+- Small footer: `Desktop mouse + keyboard`.
+
+### Background
+
+The title background should show the two districts:
+
+- Left half: **Sumpworks** rust pipes, dark canal, amber lamps.
+- Right half: **Skyloom** floating market, sky, cloth canopies, cyan signal.
+- Center: Courier Jex silhouette standing on a small signal platform.
+
+The background slowly parallaxes. No gameplay occurs.
+
+### Menu Rules
+
+No progress:
+
+- `Begin Signal`
+- `Controls`
+
+With progress:
+
+- `Continue`
+- `New Signal`
+- `Controls`
+
+`Continue` starts the furthest unlocked uncompleted stage.
+
+`New Signal` resets progress.
+
+### New Signal Confirm
+
+Before reset, show a small confirm panel:
+
+> **Erase saved signal?**
+
+Buttons:
+
+- `Erase`
+- `Cancel`
+
+Why:
+
+> Resetting all progress is irreversible. Accidental reset is a bad UX experience.
+
+### Title Visual Motif
+
+The logo should include a small signal wave under the text:
+
+- Three cyan horizontal pulses.
+- One white peak pulse.
+- Slow 2-second loop.
+
+---
+
+## 5.2 Intro
+
+The intro shows 4 short story cards.
+
+### Visual Layout
+
+- Black background.
+- Thin cyan scanline moving vertically.
+- One centered panel: 640 x 180.
+- Icon on left: 64 x 64.
+- Text on right: 2 lines max.
+- Skip prompt bottom center:
+
+> `Enter / Space / Click`
+
+### Story Cards
+
+Card 1:
+
+- Icon: broken relay tower.
+- Text: `The central relay has gone silent.`
+
+Card 2:
+
+- Icon: swarm of small red drones.
+- Text: `The Hush swarm has locked the districts.`
+
+Card 3:
+
+- Icon: Courier Jex silhouette with weapon.
+- Text: `Courier Jex carries the last tuned weapons.`
+
+Card 4:
+
+- Icon: signal map with two districts.
+- Text: `Recover 10 nodes. Restore the broadcast.`
+
+### Card Transition
+
+- Fade out old card: 0.25 s.
+- Fade in new card: 0.25 s.
+- Each card can be skipped.
+- No voice.
+- Music is minimal narrative drone.
+
+Why:
+
+> The story is compact. Four cards are enough to set the premise without slowing the player down.
+
+---
+
+## 5.3 Signal Map
+
+The Signal Map is world/stage selection.
+
+### Layout
+
+Two large panels:
+
+- Left: **World 1: Sumpworks**
+- Right: **World 2: Skyloom**
+
+Each panel:
+
+- Width: 420 px.
+- Height: 320 px.
+- Spacing: 20 px.
+- Centered horizontally and vertically.
+
+Each panel contains 5 stage nodes.
+
+### Node Layout
+
+Nodes are arranged in a horizontal signal chain:
+
+```text
+[1] --- [2] --- [3] --- [4] --- [5]
+```
+
+Node size: 40 x 40.
+
+Spacing: 52 px.
+
+### Node States
+
+| State | Appearance |
+|---|---|
+| Locked | Dark grey node, red lock icon, no pulse. |
+| Unlocked | Cyan outline, white center, subtle 1-second pulse. |
+| Completed | Filled cyan node, small white check, brighter glow. |
+
+The current furthest unlocked uncompleted stage pulses slightly stronger.
+
+### World 1 Panel
+
+- Background: rust pipes, canal, dark teal water.
+- Accent: amber lamps.
+- World label: `W1 · SUMPWORKE`.
+
+### World 2 Panel
+
+- Background: sky, floating market, cloth canopies.
+- Accent: cyan signal and lantern amber.
+- World label: `W2 · SKYLOOM`.
+
+### World 2 Lock
+
+Until World 1 Stage 5 is completed:
+
+- World 2 panel is dimmed to 50%.
+- A padlock icon appears center.
+- Text: `RESTORE W1 SIGNAL`.
+- Nodes are not selectable.
+
+### Selection
+
+Selected node:
+
+- Cyan bracket corners.
+- 2 px brighter border.
+- Small signal tick sound.
+
+Start stage:
+
+- Confirm sound.
+- Signal wipe transition into stage.
+
+Why:
+
+> The map should feel like a signal network being restored, not a generic level select screen.
+
+---
+
+## 5.4 Stage
+
+### Stage Start
+
+When entering a stage:
+
+1. 0.5 s signal wipe transition.
+2. Stage name card for 1.2 s:
+   - World label small.
+   - Stage name large.
+   - Example: `W1 · N3`
+   - Example: `Pressure Lock`
+3. Fade out.
+4. Gameplay begins.
+
+The stage name is not shown permanently except in the HUD top-right label.
+
+### Stage Visual Clarity
+
+Every stage must maintain:
+
+- Clear player silhouette.
+- Clear enemy silhouettes.
+- Clear hazard shapes.
+- Clear objective direction.
+- No background element stronger than foreground gameplay.
+- No background element using enemy projectile colors.
+
+---
+
+## 5.5 Pause
+
+Pause only exists during Stage state.
+
+### Visuals
+
+- Dim stage to 65% brightness.
+- Do not use heavy blur.
+- Center panel: 420 x 240.
+- Title: `PAUSED`
+- Buttons:
+  - `Resume`
+  - `Restart Stage`
+  - `Signal Map`
+  - `Title`
+
+All timers, enemies, projectiles, music intensity, and VFX stop.
+
+Pause in/out uses UI cue.
+
+Why:
+
+> Blur can hide layout and hurt readability when resuming. A simple dim is faster and clearer.
+
+---
+
+## 5.6 Stage Summary
+
+Shown after non-final stage completion.
+
+### Panel
+
+- Size: 520 x 260.
+- Center.
+- Dark translucent background.
+- Cyan border.
+
+### Content
+
+Top:
+
+- Stage name.
+- Stage label, e.g. `W1 · N2`.
+
+Stats:
+
+- `Time`
+- `Deaths`
+- `Cores in Stage`
+- `Total Cores`
+
+Buttons:
+
+- `Continue`
+- `Signal Map`
+
+`Continue` proceeds to next unlocked stage.
+
+`Signal Map` returns to map.
+
+### Visual Feedback
+
+- Panel slides up 12 px.
+- Core total pulses once.
+- Music changes to summary theme.
+
+---
+
+## 5.7 Game Over
+
+Shown when lives reach 0.
+
+### Visuals
+
+- Background stage dims to 40%.
+- Red vignette.
+- Large text: `SIGNAL LOST`
+- Subtext: `Connection failed.`
+
+Buttons:
+
+- `Retry Stage`
+- `Signal Map`
+- `Title`
+
+### Feel
+
+- Static signal noise.
+- Low red pulse.
+- No harsh punishment visuals.
+- No skull, gore, or dark fantasy imagery.
+
+Why:
+
+> Game Over should feel like a lost transmission, not a moral failure.
+
+---
+
+## 5.8 End
+
+Shown after World 2 Stage 5 completion.
+
+### Visuals
+
+- Bright background.
+- City signal network lights up.
+- Cyan/white light beams rise from both districts.
+- Large text: `SIGNAL RESTORED`
+- Subtext: `The broadcast is back.`
+
+Stats:
+
+- `Total Time`
+- `Total Deaths`
+- `Total Cores`
+
+Example:
+
+```text
+Total Cores 30/30
+```
+
+Buttons:
+
+- `Signal Map`
+- `Title`
+
+### Final Visual Beat
+
+During the End screen:
+
+- World 1 and World 2 icons both glow.
+- A final signal pulse travels across the screen.
+- Music resolves to a brighter major-key version of the title motif.
+
+---
+
+## 6. HUD Specification
+
+The HUD must be minimal, readable, and non-intrusive.
+
+All HUD is rendered at 960 x 540.
+
+---
+
+## 6.1 Top Left: Health and Weapons
+
+### Hearts
+
+Position:
+
+- Start at x = 16, y = 16.
+- 5 heart icons.
+- Icon size: 20 x 16.
+- Spacing: 4 px.
+
+Heart appearance:
+
+- Filled: `#FF7D9B` with 1 px dark outline.
+- Empty: dark outline only.
+- Lost heart: pulses scale 1.2 for 0.4 s.
+
+Why:
+
+> Hearts are health. They should be warm and immediately distinguishable from cyan signal elements.
+
+### Weapon Slots
+
+Position:
+
+- Below hearts.
+- Start at x = 16, y = 44.
+- 4 slots.
+- Slot size: 36 x 28.
+- Spacing: 6 px.
+
+Slot content:
+
+- Small number top-left: 10 px.
+- Weapon icon center: 16 x 16.
+
+States:
+
+| State | Appearance |
+|---|---|
+| Locked | Grey background, grey icon, diagonal slash. |
+| Unlocked inactive | Neutral border, white icon. |
+| Active | Cyan border, cyan glow, brighter icon. |
+| Deny | Red border flash + 0.15 s horizontal shake. |
+
+Weapon icons:
+
+| Weapon | Icon |
+|---|---|
+| Chirp | Single small dart. |
+| Sifter | Three small pellets in a fan. |
+| Lance | Long horizontal line. |
+| Bloom | Three curved shards from center. |
+
+Why:
+
+> The player needs to identify weapons at a glance, even while aiming.
+
+---
+
+## 6.2 Top Right: Stage and Cores
+
+Position:
+
+- Right aligned at x = 944.
+
+Content:
+
+- Stage label:
+  - Example: `W1 · N3`
+  - Size: 16 px.
+- Core counter:
+  - Example: `Cores 12/30`
+  - Size: 16 px.
+  - Small core icon before text.
+- Pause icon:
+  - 24 x 24.
+  - Two vertical bars.
+  - Bottom-right area of top-right cluster.
+
+Core counter feedback:
+
+- When a core is collected:
+  - Number flashes white for 0.4 s.
+  - Small cyan burst at HUD counter.
+  - No bottom-center text notification.
+
+Why:
+
+> A core pickup is optional and frequent. A text popup would clutter the notification area.
+
+---
+
+## 6.3 Top Center: Boss HUD
+
+Shown only during boss fights.
+
+### Boss Name
+
+- Center.
+- Size: 20 px.
+- Color: white.
+- Example: `HUSH WARDEN`
+- Example: `NULL RELAY`
+
+### Boss Health Bar
+
+- Width: 480 px.
+- Height: 12 px.
+- Position: below name.
+- Border: 1 px `#D7DDE4`.
+- Background: `#1C2530`.
+- Fill:
+  - Hush Warden: `#FF4F5A`.
+  - Null Relay: phase-colored:
+    - Phase 1: `#9F7BFF`
+    - Phase 2: `#FF6BD6`
+    - Phase 3: `#FFFFFF`
+
+### Boss Phase Warning
+
+When a phase begins:
+
+- Text appears below boss bar:
+  - `PHASE 2`
+  - `OVERLOAD`
+- Size: 24 px.
+- Color: white with red outline.
+- Hold: 1.2 s.
+- Fade: 0.3 s.
+
+Why:
+
+> Boss phase changes are major gameplay events. The player must not miss them.
+
+---
+
+## 6.4 Bottom Center: Notifications
+
+Position:
+
+- Center.
+- y = 494.
+- Width: 560 px.
+- Height: 28 px.
+
+Appearance:
+
+- Dark translucent panel.
+- Cyan text.
+- Slide up 0.2 s.
+- Hold 1.2 s.
+- Fade out 0.3 s.
+
+Notification priority:
+
+1. Weapon unlock.
+2. Boss phase warning.
+3. Checkpoint.
+4. Generic stage message.
+
+Examples:
+
+```text
+CHECKPOINT
+TUNER: SIFTER
+PHASE 2
+CONDUIT READY
+```
+
+Do not use notifications for:
+
+- Core collection.
+- Every heartbeat.
+- Weapon switch.
+- Regular enemy deaths.
+
+Why:
+
+> The notification area is for important, time-sensitive information.
+
+---
+
+## 6.5 Edge Objective Arrow
+
+When the current objective is off-screen:
+
+- Show a small chevron at the screen edge.
+- Size: 16 px.
+- Color: cyan.
+- Pulse: 0.5 s.
+
+Objective target:
+
+- Non-boss stages: Conduit.
+- Boss stages before boss death: Boss.
+- Boss stages after boss death: Conduit.
+
+Why:
+
+> During a boss stage, the Conduit is locked. Pointing to a locked exit would be confusing.
+
+The arrow must not cover:
+
+- Player.
+- Enemy projectiles.
+- Boss telegraphs.
+- Center screen.
+
+---
+
+## 6.6 First Stage Control Hint
+
+Stage 1-1 only.
+
+Bottom text:
+
+```text
+A/D move    W jump    S crouch    Mouse shoot
+```
+
+Behavior:
+
+- Visible for 10 seconds or until first successful jump.
+- Fade out 0.5 s.
+- Font: 16 px.
+- Color: `#D7DDE4`.
+- Background: none.
+
+Why:
+
+> The first stage is the tutorial. A brief reminder reduces mouse-aim confusion.
+
+---
+
+## 6.7 Damage Feedback
+
+When the player takes damage:
+
+1. Red vignette flash:
+   - Color: `#FF4F5A`.
+   - Alpha: 0.35.
+   - Duration: 0.3 s.
+2. Player sprite flickers during invulnerability:
+   - Alpha alternates 0.35 / 0.9.
+   - Flicker rate: 0.08 s on / 0.08 s off.
+3. Lost heart pulses:
+   - Scale 1.2.
+   - Duration: 0.4 s.
+4. Player hurt SFX.
+
+No full-screen red flash beyond vignette.
+
+Why:
+
+> The player must know they were hit, but the screen must remain readable.
+
+---
+
+## 7. Cursor and Aiming UX
+
+Mouse aiming is primary.
+
+### Crosshair
+
+Hide the OS cursor during Stage state.
+
+Show a custom crosshair:
+
+- Size: 12 px.
+- Color: `#4BE2FF`.
+- Center dot: 2 px.
+- Four short lines, 4 px long.
+- 1 px line width.
+
+On mouse move:
+
+- Crosshair follows mouse.
+
+On shoot:
+
+- Crosshair expands to 14 px for 0.05 s.
+
+If mouse leaves window:
+
+- Crosshair dims to 50%.
+- Aim remains last known mouse position.
+- Shooting stops.
+
+### Keyboard Fallback
+
+If mouse aiming is unavailable:
+
+- Crosshair is hidden.
+- Shooting uses facing direction.
+- Show a small facing indicator:
+  - 8 px cyan arrow.
+  - Positioned 16 px from player center in facing direction.
+  - Visible only while keyboard fallback is active.
+
+Why:
+
+> Keyboard-only players need to know which direction they are shooting.
+
+---
+
+## 8. Player Visuals
+
+Player name:
+
+# **Courier Jex**
+
+### 8.1 Silhouette
+
+Courier Jex is a compact courier:
+
+- Hooded upper body.
+- Small mask or visor.
+- Signal backpack.
+- Slightly bulky chest panel.
+- Narrow legs.
+- Compact weapon arm.
+
+Silhouette must read as a lone human courier, not a knight, robot, or cartoon hero.
+
+### 8.2 Player Colors
+
+| Part | Color |
+|---|---|
+| Suit | `#2A323C` |
+| Suit shadow | `#171D24` |
+| Hood edge | `#3A4856` |
+| Visor | `#4BE2FF` |
+| Backpack | `#3A4856` |
+| Signal belt | `#FFB347` |
+| Boots | `#1C2530` |
+
+The cyan visor is the main identity point.
+
+Why:
+
+> A bright cyan visor makes the player readable against dark industrial backgrounds and distinguishes them from rust-colored enemies.
+
+### 8.3 Sprite Size
+
+Hitboxes are from `gameplay.md`.
+
+Visual sprites may be slightly larger than hitboxes for readability.
+
+| State | Hitbox | Visual Sprite |
+|---|---:|---:|
+| Standing | 16 x 24 | 32 x 40 |
+| Crouching | 16 x 12 | 32 x 28 |
+
+Origin:
+
+- Center bottom.
+
+Facing:
+
+- Flip sprite horizontally.
+- Visual facing follows mouse X or last horizontal input.
+
+### 8.4 Player Animations
+
+| Animation | Frames | Duration | Notes |
+|---|---:|---:|---|
+| Idle | 4 | 1.2 s | Slight breathing. |
+| Run | 6 | 0.45 s | Compact courier stride. |
+| Jump | 3 | one-time | Knees tuck. |
+| Fall | 2 | one-time | Arms back. |
+| Crouch | 4 | 0.2 s | Body compresses 65% height. |
+| Crouch Run | 4 | 0.5 s | Low shuffling. |
+| Shoot | 2 | 0.15 s | Weapon recoil. |
+| Hurt | 2 | 0.2 s | Body tilts back. |
+| Death | 6 | 0.5 s | No blood. Signal shatter. |
+
+Death visual:
+
+- Player breaks into cyan/white signal shards.
+- Small rust shards.
+- No gore.
+- No lingering corpse.
+- Death lasts 0.5 s, then respawn or game over.
+
+Why:
+
+> The player should disappear as a burst of signal, matching the courier/signal theme.
+
+### 8.5 Crouch Visual
+
+When crouching:
+
+- Sprite compresses vertically.
+- Visor remains visible.
+- Weapon lowers.
+- Muzzle origin visually matches gameplay crouch offset.
+- Hitbox is smaller, but sprite may still show some head height for readability.
+
+The crouch state should be obvious.
+
+---
+
+## 9. Weapon Visuals
+
+Weapons are visible extensions of the player arm.
+
+They do not change hitbox.
+
+They should be readable at small size.
+
+---
+
+## 9.1 Chirp
+
+Role: fast default weapon.
+
+Visual:
+
+- Compact pistol.
+- Dark steel body.
+- Cyan energy tip.
+- Small side vent.
+
+Muzzle flash:
+
+- Small 1-frame cyan star.
+- 6 px radius.
+- Duration: 0.05 s.
+
+Weapon color accent:
+
+- Cyan.
+
+Why:
+
+> Chirp is the baseline tool. It should look simple and reliable.
+
+---
+
+## 9.2 Sifter
+
+Role: close-range spread.
+
+Visual:
+
+- Boxier shotgun-like device.
+- Three front vents.
+- Amber energy chamber.
+
+Muzzle flash:
+
+- Three small puffs.
+- One white center puff.
+- Two amber side puffs.
+- Duration: 0.06 s.
+
+Weapon color accent:
+
+- Amber.
+
+Why:
+
+> Sifter is about controlled spray. The three vents visually explain the spread.
+
+---
+
+## 9.3 Lance
+
+Role: piercing single-target weapon.
+
+Visual:
+
+- Long rail.
+- Narrow body.
+- White core line running through the barrel.
+- Cyan edge glow.
+
+Muzzle flash:
+
+- Elongated white/cyan line.
+- 16 px long.
+- Duration: 0.08 s.
+
+Weapon color accent:
+
+- White/cyan.
+
+Why:
+
+> Lance should look like it fires something sharp and straight.
+
+---
+
+## 9.4 Bloom
+
+Role: splitting area weapon.
+
+Visual:
+
+- Bulky emitter.
+- Round drum.
+- Amber core.
+- Three small arc vents around the front.
+
+Muzzle flash:
+
+- Round amber ring.
+- 10 px radius.
+- Duration: 0.1 s.
+
+Weapon color accent:
+
+- Amber/white.
+
+Why:
+
+> Bloom is heavy and spatial. The round drum and arc vents suggest area control.
+
+---
+
+## 9.5 Weapon Switching Visual
+
+When switching weapons:
+
+- Old weapon fades out over 0.05 s.
+- New weapon slides in over 0.07 s.
+- Small white spark at the player’s hand.
+- No gameplay effect beyond cooldown defined by `gameplay.md`.
+
+When locked weapon is selected:
+
+- Slot shakes.
+- Red deny flash.
+- Weapon does not change.
+- Deny SFX.
+
+---
+
+## 10. Projectile Visuals
+
+Projectiles must be extremely readable.
+
+### 10.1 Player Projectiles
+
+Player projectiles are cool-toned:
+
+- Cyan.
+- White.
+- Light amber only for Bloom.
+
+All player projectiles have a bright white core.
+
+#### Chirp Projectile
+
+- Hitbox radius: 4 px.
+- Visual: 8 px long dart.
+- Color: cyan outer, white core.
+- Trail: 2 fading segments.
+- Lifetime visual: trail fades over 0.15 s.
+
+#### Sifter Pellet
+
+- Hitbox radius: 3 px.
+- Visual: 6 px round pellet.
+- Color: cyan outer, white core.
+- Trail: 1 short segment.
+- Spread visually matches -8°, -4°, 0°, +4°, +8°.
+
+#### Lance Projectile
+
+- Hitbox radius: 5 px.
+- Visual: 20 px long beam bolt.
+- Color: white core, cyan outer.
+- Trail: 3 segments.
+- Pierce indicator:
+  - First hit: small white ripple.
+  - Second hit: brighter ripple.
+  - Third hit: final rupture.
+
+#### Bloom Main Projectile
+
+- Hitbox radius: 8 px.
+- Visual: 16 px round orb.
+- Color: amber outer, white core.
+- Slight pulse: 0.25 s.
+- Trail: soft amber glow.
+
+#### Bloom Shard
+
+- Hitbox radius: 4 px.
+- Visual: 8 px shard.
+- Color: amber outer, white core.
+- Trail: 1 segment.
+- Angle visually matches -25°, 0°, +25° from main direction.
+
+---
+
+### 10.2 Enemy Projectiles
+
+Enemy projectiles are warm-toned:
+
+- Red.
+- Orange.
+- Violet for final boss special shots.
+
+All enemy projectiles must have a white or pale core to remain visible.
+
+#### Dredge Drone Projectile
+
+- Visual: 12 px round orb.
+- Color: red outer, white core.
+- Slow pulse: 0.3 s.
+- Small smoke trail.
+
+#### Warden Sentry Projectile
+
+- Visual: 12 px rectangular bolt.
+- Color: orange outer, white core.
+- Short rectangular trail.
+
+#### Bolt Golem Heavy Bolt
+
+- Visual: 20 px round orb.
+- Color: dark red outer, white core.
+- Outer ring: 1 px.
+- Heavy thump visual scale:
+  - 1.0 → 1.15 → 1.0 over 0.2 s.
+
+#### Boss Rain Projectile
+
+- Visual: 12 x 24 vertical shard.
+- Color: red outer, white core.
+- Falls downward.
+- Small impact splash.
+
+#### Boss Echo Shot
+
+- Visual: 12 x 18 bolt.
+- Color: violet outer, white core.
+- Bounce effect:
+  - Small violet spark at wall.
+  - Slight squash on impact.
+
+#### Boss Beam
+
+Visual:
+
+- Telegraph: dashed red/orange line.
+- Active beam: solid red with white core.
+- Beam height matches gameplay width: 24 px.
+- Edge caps: bright orange.
+
+Why:
+
+> Beams are high-damage. They need a distinct telegraph shape and color separate from small projectiles.
+
+---
+
+## 11. Enemy Visuals and Telegraphs
+
+All enemies must have:
+
+- Clear idle silhouette.
+- Clear attack telegraph.
+- Clear hit feedback.
+- Clear death effect.
+- Distinct shape from player.
+
+General hit feedback:
+
+- White flash: 0.05 s.
+- Small spark at impact point.
+- Knockback visual squash or stretch.
+
+---
+
+## 11.1 Mite Crawler
+
+Type: small ground swarm.
+
+Visual:
+
+- Small rust bug.
+- Four legs.
+- Red eye.
+- 16 x 16 hitbox.
+- Visual sprite: 24 x 24.
+
+Palette:
+
+- Rust dark.
+- Rust light.
+- Red eye.
+
+Animation:
+
+- Crawl: 4 frames, 0.5 s loop.
+- Blocked: 0.5 s wait, antennae twitch.
+- Hit: squash.
+- Death: 4 rust shards.
+
+Why:
+
+> Mites are small and numerous. They need a simple bug silhouette and quick death.
+
+---
+
+## 11.2 Dredge Drone
+
+Type: flying shooter.
+
+Visual:
+
+- Small maintenance drone.
+- Single red eye.
+- Two side thrusters.
+- 24 x 20 hitbox.
+- Visual sprite: 32 x 28.
+
+Palette:
+
+- Steel.
+- Rust light.
+- Red eye.
+- Amber thruster glow.
+
+Animation:
+
+- Hover: 4 frames, 0.8 s loop.
+- Fire telegraph:
+  - Eye brightens for 0.15 s before projectile spawn.
+  - Thrusters flash amber.
+- Fire:
+  - Small recoil.
+  - Red projectile.
+- Death:
+  - Smoke puff.
+  - Small red flash.
+  - Drone body splits.
+
+Why:
+
+> Drones are aerial threats. The eye brightening gives a readable prefire cue.
+
+---
+
+## 11.3 Pincer Bot
+
+Type: melee charger.
+
+Visual:
+
+- Low armored walker.
+- Two front pincers.
+- Red core between pincers.
+- 24 x 24 hitbox.
+- Visual sprite: 32 x 32.
+
+Palette:
+
+- Rust dark.
+- Steel.
+- Red core.
+
+States:
+
+| State | Visual |
+|---|---|
+| Idle | Slow walk, pincers closed. |
+| Telegraph | Pincers open, red core brightens, body shakes 2 px. |
+| Charge | Body stretches forward, red trail. |
+| Cooldown | Pincers lower, core dims. |
+
+Telegraph:
+
+- Duration: 0.5 s.
+- Shake: 2 px horizontal.
+- Pincers open.
+- Red glow intensifies.
+
+Charge:
+
+- Body stretches 1.2x horizontally.
+- Red trail: 3 fading frames.
+- Stops with small impact puff.
+
+Why:
+
+> The charge must be readable early enough to dodge by jump or crouch.
+
+---
+
+## 11.4 Warden Sentry
+
+Type: stationary aimed turret.
+
+Visual:
+
+- Wall or floor turret.
+- Rotating head.
+- Thick barrel.
+- Red target light.
+- 32 x 32 hitbox.
+- Visual sprite: 40 x 40.
+
+Palette:
+
+- Steel.
+- Rust.
+- Red target light.
+- Orange muzzle.
+
+Animation:
+
+- Idle: slow scan.
+- Aim: head rotates toward player.
+- Fire:
+  - Muzzle flash.
+  - Barrel recoil.
+  - Two-shot burst.
+- Death:
+  - Head drops.
+  - Smoke.
+  - Power-down light.
+
+Why:
+
+> The barrel angle communicates target direction. The red target light shows active threat.
+
+---
+
+## 11.5 Mist Wraith
+
+Type: flying phasing enemy.
+
+Visual:
+
+- Ghost-like signal creature.
+- Tattered lower body.
+- Pale cyan/white form.
+- Dark hollow center.
+- 24 x 24 hitbox.
+- Visual sprite: 32 x 32.
+
+Palette:
+
+- Signal cyan.
+- Signal white.
+- Dark void center.
+
+Phased visual:
+
+- Alpha drops to 0.25.
+- Outline becomes dashed.
+- Small ripple appears at phase start and end.
+- Player projectiles pass through with a faint distortion.
+- No player damage while phased.
+
+Why:
+
+> Phasing must be visually unmistakable. The dashed outline and low alpha communicate intangibility.
+
+---
+
+## 11.6 Bolt Golem
+
+Type: large armored enemy.
+
+Visual:
+
+- Large rust machine.
+- Heavy arms.
+- Central chest cannon.
+- Thick legs.
+- 48 x 48 hitbox.
+- Visual sprite: 64 x 64.
+
+Palette:
+
+- Rust dark.
+- Rust light.
+- Steel.
+- Red chest core.
+
+Animations:
+
+- Walk: 4 frames, 1.2 s loop.
+- Heavy bolt telegraph:
+  - Chest core glows for 0.3 s.
+  - Arms raise slightly.
+- Fire:
+  - Large recoil.
+  - Smoke puff.
+- Stomp telegraph:
+  - Arms raise.
+  - Red ring appears on ground in front.
+  - Ring size: 3 tiles diameter.
+  - Duration: 0.4 s.
+- Stomp:
+  - Screen shake: 3 px, 0.1 s.
+  - Dust puff.
+  - Temporary spike patches appear.
+
+Why:
+
+> The golem is a heavy pressure enemy. Its telegraphs should feel large and heavy.
+
+---
+
+## 11.7 World 2 Enemy Variants
+
+World 2 enemies use the same shapes but with a brighter Skyloom palette.
+
+Changes:
+
+- Rust replaced with pale steel.
+- Red eyes remain red.
+- Thruster glows are slightly brighter.
+- Small sky-fin or cable detail added.
+- Shadows are softer.
+
+Why:
+
+> The player should recognize enemy roles instantly, while World 2 still feels visually distinct.
+
+---
+
+## 12. Boss Visuals
+
+Bosses are major set pieces.
+
+They must be visually larger, more dramatic, and easier to read than normal enemies.
+
+---
+
+## 12.1 Hush Warden
+
+Location: Stage 1-5.
+
+Role: World 1 guardian.
+
+### Base Appearance
+
+- Large maintenance warden.
+- Rust armor.
+- Single red optic.
+- Four heavy arms.
+- 64 x 64 hitbox.
+- Visual sprite: 80 x 80.
+
+Palette:
+
+- Rust dark.
+- Rust light.
+- Steel.
+- Red optic.
+- Orange warning lights.
+
+Phase 1:
+
+- Red optic dim.
+- Armor intact.
+- Movement heavy.
+
+Phase 2:
+
+- Red optic brighter.
+- Armor cracks reveal orange core.
+- Slight red glow around body.
+
+### Attacks
+
+#### Charge
+
+Telegraph:
+
+- 0.6 s.
+- Boss crouches.
+- Red line appears from boss toward player direction.
+- Red chevrons pulse along the path.
+
+Action:
+
+- Boss dashes.
+- Red trail.
+- Spike patches appear along path.
+- Spike patches have red tips.
+
+#### Fan Bolt
+
+- Three red bolts.
+- Muzzle flash from chest.
+- Bolts match Dredge Drone projectile style but larger.
+
+#### Sweep Beam
+
+Phase 2 only.
+
+Telegraph:
+
+- 0.8 s.
+- Dashed red line appears at boss/player Y.
+- Height: 24 px.
+- Edge arrows appear at arena boundaries.
+
+Beam:
+
+- Solid red beam.
+- White core line.
+- Orange edge glow.
+- Lasts 0.7 s.
+
+#### Drone Summon
+
+Phase 2 only.
+
+- Red ring appears at boss.
+- Two Dredge Drones fade in over 0.4 s.
+- Small smoke puff.
+
+#### Death
+
+2-second sequence:
+
+1. Boss stops.
+2. Optic flickers.
+3. Red light turns off.
+4. Armor panels fall.
+5. White signal burst.
+6. Conduit activates.
+
+---
+
+## 12.2 Null Relay
+
+Location: Stage 2-5.
+
+Role: final boss.
+
+### Base Appearance
+
+- Abstract central relay.
+- Rotating geometric rings.
+- Central core.
+- No human face.
+- Should feel like a corrupted city relay, not a monster.
+- 80 x 80 hitbox.
+- Visual sprite: 96 x 96.
+
+Palette by phase:
+
+| Phase | Core | Rings |
+|---|---|---|
+| 1 | Violet | Cyan |
+| 2 | Magenta | Violet |
+| 3 | White | Red |
+
+### Attacks
+
+#### Rain
+
+- Three vertical columns.
+- Telegraph:
+  - 0.3 s red dashed vertical lines.
+- Projectiles:
+  - Red vertical shards.
+  - White core.
+- Impact:
+  - Small dust or water splash.
+
+#### Side Sweep
+
+Telegraph:
+
+- 0.8 s.
+- Dashed horizontal line.
+- Red/orange.
+- Edge arrows.
+
+Beam:
+
+- Horizontal beam.
+- 24 px height.
+- Red outer, white core.
+
+#### Echo Shot
+
+- Three violet bolts.
+- Each bolt bounces once.
+- Bounce visual:
+  - Violet spark.
+  - Slight squash.
+  - Short trail.
+
+#### Wraith Summon
+
+- Purple ring.
+- Two Mist Wraiths fade in.
+- Similar to Hush Warden summon but violet.
+
+#### Overload Cycle
+
+Phase 3.
+
+Sequence:
+
+1. Horizontal beam:
+   - Telegraph 0.6 s.
+   - Active 0.6 s.
+2. Vertical beam:
+   - Telegraph 0.6 s.
+   - Active 0.6 s.
+3. Core Exposed:
+   - Boss becomes stationary.
+   - Core turns bright white.
+   - Ring of white light pulses.
+   - Visual damage multiplier cue:
+     - Player projectiles hitting core produce extra white ripple.
+     - Boss bar pulses white.
+
+Why:
+
+> The player must understand that Core Exposed is a reward window, so the visual language must become brighter and more inviting.
+
+#### Death
+
+3-second sequence:
+
+1. Boss stops.
+2. Rings slow.
+3. Core flashes white.
+4. Rings collapse inward.
+5. Large white burst.
+6. Background city lights begin to restore.
+7. Conduit activates.
+
+---
+
+## 13. Stage Objects and Hazard Grammar
+
+All stage objects must follow the same visual grammar.
+
+| Object | Visual Meaning |
+|---|---|
+| Spike | Immediate damage. Red tip. |
+| Conveyor | Movement aid. Animated arrows. |
+| One-way platform | Safe floor from below. Cyan top edge. |
+| Moving platform | Temporary floor. Rust slab, cyan edge. |
+| Wind zone | Invisible-ish force, but visually shown. |
+| Checkpoint | Safe respawn. Beacon. |
+| Core | Optional signal collectible. |
+| Signal Heart | Health. |
+| Tuner Shard | Weapon unlock. |
+| Conduit | Stage exit. |
+
+---
+
+## 13.1 Spikes
+
+Size: 32 x 16.
+
+Appearance:
+
+- Rust base.
+- Red tips.
+- 1 px dark outline.
+- Slight bevel.
+
+Feedback:
+
+- On player contact: red vignette and hurt SFX.
+- Spike does not animate except small warning pulse when boss leaves spike patches.
+
+Temporary spike patches:
+
+- Appear with 0.2 s warning:
+  - Red outline.
+  - Then solid spikes pop out.
+- Last duration matches gameplay.
+- Disappear with small rust dust.
+
+Why:
+
+> Spikes are instant damage. The red tip must be visible from a distance.
+
+---
+
+## 13.2 Conveyor Tiles
+
+Size: 32 x 32.
+
+Appearance:
+
+- Steel surface.
+- Animated arrows on top.
+- Arrow color: cyan.
+- Arrow direction matches conveyor direction.
+
+Animation:
+
+- 4-frame arrow loop.
+- Speed: 0.4 s loop.
+- Right conveyor: arrows point right.
+- Left conveyor: arrows point left.
+
+Why:
+
+> Cyan arrows communicate movement without using red, which means danger.
+
+---
+
+## 13.3 One-Way Platforms
+
+Size: 32 x 8.
+
+Appearance:
+
+- Dark slab.
+- Top edge: 2 px cyan.
+- No side thickness.
+- Slight transparent underside.
+
+Behavior visual:
+
+- Player can jump through from below.
+- No visual change when jumping through.
+- Landing: small dust puff.
+
+Why:
+
+> The cyan top edge tells the player this is a floor only from below.
+
+---
+
+## 13.4 Moving Platforms
+
+Size: usually 64 x 16, but visual size may follow stage definition.
+
+Appearance:
+
+- Rust slab.
+- Cyan edge lights.
+- Small warning stripes on front edge.
+- Edge lights pulse when platform moves.
+
+Why:
+
+> Moving platforms are safe but temporary. The cyan edges make them readable against pits.
+
+---
+
+## 13.5 Wind Zones
+
+Wind zones must be visible.
+
+### Updraft
+
+Visual:
+
+- Vertical cyan streaks.
+- Small dust particles moving upward.
+- Alpha: 0.25.
+- Particle speed: roughly 160 px/s upward.
+- Edges: soft fade, not hard lines.
+
+Why:
+
+> Updraft is a movement aid, not damage. Cyan communicates safety.
+
+### Horizontal Gust Right
+
+Visual:
+
+- Rightward streaks.
+- Small arrows.
+- Alpha: 0.2.
+- Particles move right.
+
+### Horizontal Gust Left
+
+Visual:
+
+- Leftward streaks.
+- Small arrows.
+- Alpha: 0.2.
+- Particles move left.
+
+### Strong Wind
+
+For World 2 strong wind:
+
+- More particles.
+- Faster streaks.
+- Slight camera-independent background sway:
+  - Nearby props sway 2 px.
+  - No gameplay effect beyond defined acceleration.
+
+Why:
+
+> Wind affects movement strongly, so it must be obvious before the player is pushed.
+
+---
+
+## 13.6 Checkpoint
+
+Size: 32 x 48.
+
+Appearance:
+
+- Beacon pillar.
+- Inactive: dark grey, red light.
+- Active: cyan light, soft glow.
+
+Activation:
+
+- 0.5 s cyan beam rises.
+- Ring expands.
+- Small positive chime.
+- HUD notification: `CHECKPOINT`
+- If below max health, restore 1 heart:
+  - Heart icon pulses.
+  - Small pink spark.
+
+Why:
+
+> Checkpoints are relief. Their visual should feel safe and clean.
+
+---
+
+## 13.7 Core
+
+Size: 24 x 24.
+
+Appearance:
+
+- Rotating diamond.
+- White core.
+- Cyan outer glow.
+- 8-frame spin.
+- Spin duration: 1.0 s.
+
+Collection:
+
+- 6 small cyan/white particles.
+- HUD counter flashes.
+- Bright pickup sound.
+- No bottom-center text.
+
+Already collected:
+
+- Not spawned on stage load or retry.
+
+Why:
+
+> Cores are optional signal fragments. White/cyan makes them feel valuable but not hostile.
+
+---
+
+## 13.8 Signal Heart
+
+Size: 24 x 24.
+
+Appearance:
+
+- Pink heart.
+- 1 px dark outline.
+- Pulse: 0.8 s.
+- Soft warm glow.
+
+Collection:
+
+- Only if player hearts below 5.
+- Small pink burst.
+- Heart HUD pulses.
+- Warm pickup sound.
+
+If player is full:
+
+- Heart remains in world.
+- No sparkle.
+- No pickup sound.
+
+Why:
+
+> Hearts are health. They should feel warm and comforting, unlike cold enemy projectiles.
+
+---
+
+## 13.9 Tuner Shard
+
+Size: 32 x 48.
+
+Appearance:
+
+- Amber crystal.
+- Weapon icon etched on surface.
+- 6-frame shimmer.
+- Slight floating bob.
+
+Collection:
+
+- Amber/white burst.
+- Unlock beam travels from pickup to HUD weapon slot.
+- Weapon slot flashes cyan.
+- Notification:
+  - `TUNER: SIFTER`
+  - `TUNER: LANCE`
+  - `TUNER: BLOOM`
+- Major unlock SFX.
+
+Already collected:
+
+- Not spawned on stage load or retry.
+
+Why:
+
+> Weapon unlocks are major progression moments. The visual should connect the shard to the HUD slot.
+
+---
+
+## 13.10 Conduit
+
+Size: 64 x 96.
+
+Role: stage exit.
+
+### Inactive / Locked
+
+- Dark grey tower.
+- Red lock icon.
+- Red ring at base.
+- Slow red pulse: 1.0 s.
+
+### Active Non-Boss
+
+- Cyan spiral.
+- White core.
+- Fast cyan pulse: 0.5 s.
+
+### Boss Stage
+
+Before boss death:
+
+- Locked red.
+- Boss is the objective.
+
+After boss death:
+
+- Turns cyan.
+- Notification: `CONDUIT READY`
+- Activation available.
+
+### Activation
+
+When player overlaps active conduit:
+
+- Tower flashes white.
+- 0.5 s signal burst.
+- Screen fades to summary or end.
+- Stage complete SFX.
+
+Why:
+
+> The Conduit is the stage objective. Its state must be clear from a distance.
+
+---
+
+## 14. World Art Direction
+
+The two worlds must feel distinct but part of the same game.
+
+They share:
+
+- Same UI.
+- Same font.
+- Same hazard colors.
+- Same signal cyan/amber/red grammar.
+- Same sprite style.
+- Same projectile readability.
+
+They differ in:
+
+- Palette.
+- Backgrounds.
+- Environmental props.
+- Lighting.
+- Mood.
+- Music.
+
+---
+
+## 14.1 World 1: Sumpworks
+
+Theme:
+
+- Lower industrial canal.
+- Rust.
+- Pipes.
+- Low ceilings.
+- Conveyors.
+- Pits.
+- Turrets.
+
+### Visual Mood
+
+- Cold.
+- Wet.
+- Oppressive.
+- Industrial.
+- Slightly dangerous but readable.
+
+### Palette Emphasis
+
+- Void dark.
+- Deep steel.
+- Rust.
+- Oil teal.
+- Amber lamps.
+- Signal cyan for safe systems.
+
+### Background Layers
+
+Far:
+
+- Distant bridge silhouettes.
+- Broken relay towers.
+- Dark sky.
+
+Mid:
+
+- Pipes.
+- Catwalks.
+- Drain grates.
+- Cables.
+
+Near:
+
+- Rust panels.
+- Warning stripes.
+- Dripping pipes.
+- Canal water edges.
+
+### Environment Details
+
+- Water in pits:
+  - Dark teal.
+  - Small foam ripples.
+  - No death animation beyond splash and hurt.
+- Low ceilings:
+  - Exposed pipes.
+  - Amber warning lights.
+  - Cables.
+- Conveyor areas:
+  - Animated arrows.
+  - Dust particles moving with belt.
+- Sentry alcoves:
+  - Small red target lights.
+  - Steel frames.
+
+### World 1 Stage Visual Notes
+
+These are presentation notes only, not level design.
+
+| Stage | Visual Focus |
+|---|---|
+| 1-1 First Current | Brighter, cleaner, clear tutorial silhouettes. |
+| 1-2 Dredge Run | More moving platforms, conveyor belts, water below. |
+| 1-3 Pressure Lock | Vertical shafts, pistons, steel pressure doors. |
+| 1-4 Rust Gallery | Long low ceiling, gallery lights, rusted catwalks. |
+| 1-5 Hush Warden | Dark boss arena, red beacon lighting, side ledges. |
+
+Why:
+
+> World 1 should teach the player through readable industrial spaces.
+
+---
+
+## 14.2 World 2: Skyloom
+
+Theme:
+
+- Floating market.
+- Vertical platforms.
+- Wind currents.
+- Wide gaps.
+- Open sightlines.
+- More aggressive enemy patterns.
+
+### Visual Mood
+
+- Airy.
+- Exposed.
+- Brighter.
+- Wind-swept.
+- More open than World 1.
+
+### Palette Emphasis
+
+- Sky blue.
+- Pale steel.
+- Lavender.
+- Signal cyan.
+- Lantern amber.
+- Danger red remains consistent.
+
+### Background Layers
+
+Far:
+
+- Sky gradient.
+- Distant spires.
+- Small floating islands.
+- Slow clouds.
+
+Mid:
+
+- Market stalls.
+- Cloth canopies.
+- Ropes.
+- Lanterns.
+- Hanging cables.
+
+Near:
+
+- Light cloth edges.
+- Small lamps.
+- Wind-rippled banners.
+
+### Environment Details
+
+- Pits:
+  - Show sky below, not water.
+  - Distant clouds.
+  - Small floating debris.
+- One-way shelves:
+  - Market stalls.
+  - Cloth-topped platforms.
+  - Cyan top edge remains.
+- Updraft columns:
+  - Stronger cyan particles.
+  - Small cloth scraps rising.
+- Wind gusts:
+  - More streaks.
+  - Banners ripple.
+  - Dust particles move with wind.
+
+### World 2 Stage Visual Notes
+
+| Stage | Visual Focus |
+|---|---|
+| 2-1 Lifted Bazaar | Vertical market shelves, updraft, cloth. |
+| 2-2 Market Veils | Hanging veils, lanterns, shelf loops. |
+| 2-3 Windrace | Strong wind streaks, open gaps, golem chamber. |
+| 2-4 Highspire Ascent | Tall sky ledges, crosswind, narrow platforms. |
+| 2-5 Null Relay | Final relay arena, bright core, abstract geometry. |
+
+Why:
+
+> World 2 should feel like the city has opened upward. The danger is still present, but the space is more vertical and exposed.
+
+---
+
+## 15. VFX and Readability Rules
+
+### 15.1 General VFX Principles
+
+- VFX must never hide hazards.
+- VFX must never change hitboxes.
+- VFX must not create false damage cues.
+- Player VFX should be brief.
+- Enemy telegraphs must be long enough to read.
+- Boss telegraphs must be the most prominent visual elements.
+
+### 15.2 Hit Sparks
+
+Player projectile hits enemy:
+
+- 3 small particles.
+- White/cyan for player weapons.
+- Duration: 0.1 s.
+- Size: 2-4 px.
+
+Enemy projectile hits player:
+
+- 4 small particles.
+- Red/orange.
+- Duration: 0.15 s.
+
+### 15.3 Enemy Death Effects
+
+| Enemy | Death Effect |
+|---|---|
+| Mite Crawler | 4 rust shards. |
+| Dredge Drone | Smoke puff + small red flash. |
+| Pincer Bot | Metallic clank + 4 rust/steel shards. |
+| Warden Sentry | Head drops + power-down spark. |
+| Mist Wraith | Phasing ripple + cyan dust. |
+| Bolt Golem | Low explosion + 6 rust shards + dust. |
+| Boss | Large multi-stage signal burst. |
+
+Why:
+
+> Each enemy should have a distinct death so the player understands what they destroyed.
+
+### 15.4 Beam Telegraphs
+
+All beams use:
+
+- Dashed line before activation.
+- Edge arrows.
+- Hold time.
+- Solid beam after telegraph.
+
+Dashed line:
+
+- 4 dashes.
+- Dash length: 12 px.
+- Gap: 8 px.
+- Color: red/orange.
+- Alpha: 0.6.
+
+Active beam:
+
+- Solid core.
+- White center.
+- Red/orange outer.
+- Edge caps bright.
+
+Why:
+
+> Beams are lethal and horizontal/vertical. The player needs a consistent pre-beam warning shape.
+
+### 15.5 Screen Shake
+
+Screen shake is used sparingly.
+
+| Event | Shake | Duration |
+|---|---:|---:|
+| Player hurt | 2 px | 0.08 s |
+| Bolt Golem stomp | 3 px | 0.10 s |
+| Boss charge impact | 3 px | 0.10 s |
+| Boss death | 4 px | 0.15 s |
+
+No shake for:
+
+- Regular enemy deaths.
+- Core pickup.
+- Checkpoint.
+- Weapon switch.
+- Regular shooting.
+
+Why:
+
+> Shake is feedback, not constant noise.
+
+### 15.6 Damage Vignette
+
+- Red vignette on player damage.
+- No permanent vignette.
+- No low-health visual effect unless explicitly added later.
+
+Why:
+
+> Keep damage feedback immediate and clean.
+
+---
+
+## 16. Audio and Music Design
+
+Audio identity:
+
+> Industrial signal. Clean synth pulses, metallic percussion, analog beeps, soft wind, and short procedural cues.
+
+The music should feel like a city trying to reboot.
+
+No voice acting.
+
+No sampled heavy metal.
+
+No orchestral fantasy.
+
+No lo-fi bedroom pop.
+
+The sound should be tight, modern, and readable.
+
+---
+
+## 16.1 Music Identity
+
+### Core Instruments
+
+- Soft analog pads.
+- Short square-wave beeps.
+- Metallic percussion.
+- Filtered noise for wind.
+- Simple bass pulses.
+- Occasional high sine signal melody.
+
+### Musical Feel
+
+- Sparse but rhythmic.
+- Repetitive motifs.
+- Melody is short and memorable.
+- Percussion enters gradually in harder stages.
+- Boss music is more driving.
+- End music resolves to a brighter major motif.
+
+---
+
+## 16.2 Music Map
+
+| State / Zone | Key | BPM | Style |
+|---|---:|---:|---|
+| Title | D minor | 72 | Slow signal pulse, sparse pads. |
+| Intro | D minor | 68 | Minimal drone, narrative beeps. |
+| Signal Map | D major | 96 | Bright, clean, optimistic. |
+| World 1 Stages 1-4 | D minor | 104 | Rust industrial, medium pulse. |
+| World 1 Boss | E minor | 120 | Heavy drive, red pulse. |
+| World 2 Stages 1-4 | F major | 112 | Airy pads, faster metallic percussion. |
+| World 2 Boss | C minor | 126 | Layered tension, phase-driven. |
+| Stage Summary | D major | 100 | Short resolution motif. |
+| Game Over | C minor | 60 | Low signal loss. |
+| End | D major | 96 | Full bright resolution. |
+
+### World 1 Music
+
+- Low bass.
+- Metallic clanks.
+- Drip sounds.
+- Conveyor-like rhythmic pulses.
+- Amber warning beeps.
+- Mood: industrial, damp, determined.
+
+### World 2 Music
+
+- Higher synth pads.
+- Wind noise.
+- Lighter percussion.
+- More open stereo space.
+- Occasional high signal melody.
+- Mood: exposed, fast, brighter but dangerous.
+
+### Boss Music
+
+Hush Warden:
+
+- Phase 1: heavy pulse.
+- Phase 2: adds high metallic arp and faster percussion.
+
+Null Relay:
+
+- Phase 1: violet/cyan tension, layered pads.
+- Phase 2: adds urgent pulse.
+- Phase 3: strips back to strong bass and warning beeps during Core Exposed.
+
+Why:
+
+> Phase changes should be felt musically, not just visually.
+
+### Music Transitions
+
+- Crossfade: 0.5 s.
+- Stage start sting: 0.6 s.
+- Boss start: music intensity rises.
+- Boss death: music cuts, then resolution cue.
+- Pause: music stops or ducks to 20%.
+- Resume: 0.2 s fade in.
+
+---
+
+## 16.3 SFX Design
+
+All SFX should be short and distinct.
+
+General rules:
+
+- Player SFX are bright and clean.
+- Enemy SFX are harsher.
+- UI SFX are short and digital.
+- Pickups are positive.
+- Damage is urgent but not painful.
+- No SFX should be longer than 0.8 s except boss death and stage complete.
+
+### SFX Table
+
+| Event | Sound Design | Duration | Notes |
+|---|---|---:|---|
+| Title confirm | Short high beep | 0.08 s | Clean UI. |
+| UI hover | Very soft tick | 0.03 s | Subtle. |
+| UI deny | Low buzz | 0.12 s | Used for locked weapon, invalid input. |
+| Pause in | Soft down blip | 0.08 s |  |
+| Pause out | Soft up blip | 0.08 s |  |
+| Stage start sting | Two-note world motif | 0.6 s | World 1 lower, World 2 higher. |
+| Player jump | Quick upward sine | 0.06 s | 300 Hz to 600 Hz. |
+| Player land | Soft thud | 0.08 s | Lowpassed. |
+| Chirp fire | Fast square pop | 0.05 s | 900 Hz. |
+| Sifter fire | Short micro-spread | 0.08 s | 3 tiny pops. |
+| Lance fire | Deeper piercing sweep | 0.12 s | 1200 Hz down to 200 Hz. |
+| Bloom fire | Heavy low pulse | 0.15 s | 80 Hz + filtered noise. |
+| Bloom split | Small burst | 0.10 s | Bright chime. |
+| Player projectile hit | Impact click | 0.05 s | Vary pitch by enemy size. |
+| Player hurt | Short alarm | 0.12 s | 200 Hz square. |
+| Player death | Deeper falling cue | 0.5 s | Descending sweep. |
+| Checkpoint | Positive two-note | 0.3 s | Rising clean tones. |
+| Core collected | Bright pickup arpeggio | 0.25 s | Three fast notes. |
+| Heart collected | Warm pickup | 0.2 s | Soft thump + chime. |
+| Tuner unlock | Major unlock cue | 0.6 s | Clear and important. |
+| Enemy death: Mite | Small rust crunch | 0.10 s |  |
+| Enemy death: Drone | Zap + servo | 0.20 s |  |
+| Enemy death: Pincer | Metallic clank | 0.30 s |  |
+| Enemy death: Sentry | Power-down beep | 0.30 s |  |
+| Enemy death: Wraith | Phase-out sine fall | 0.40 s |  |
+| Enemy death: Golem | Low boom + crack | 0.50 s |  |
+| Boss warning | Warning alarm | 0.5 s | Used before major attack. |
+| Boss phase change | Pitch-shift cue | 0.4 s | Phase 2: higher, Phase 3: white-noise burst. |
+| Boss death | Large resolution | 0.8 s | Explosion + rising signal. |
+| Conduit complete | Stage complete sweep | 0.7 s | Rising sweep, clean ending. |
+
+### SFX Priority
+
+If multiple SFX trigger at once, prioritize:
+
+1. Player hurt.
+2. Player death.
+3. Boss warning.
+4. Checkpoint.
+5. Tuner unlock.
+6. Core/heart pickup.
+7. Enemy death.
+8. Weapon fire.
+9. UI.
+
+Why:
+
+> The player must always know if they are damaged or if a major event is happening.
+
+---
+
+## 16.4 Mixing Guidelines
+
+Target for browser game:
+
+- Music volume: 0.5.
+- SFX volume: 0.7.
+- UI volume: 0.8.
+- Master limiter peak: -3 dB.
+- Avoid clipping.
+- Duck music by -6 dB during important SFX:
+  - Player hurt.
+  - Boss warning.
+  - Stage complete.
+  - Boss death.
+
+Do not use:
+
+- Long reverb tails.
+- Harsh high-frequency spikes.
+- SFX that overlap identically.
+- Random noise without purpose.
+
+Why:
+
+> Browser audio needs to stay clean at low quality and small speakers.
+
+---
+
+## 17. Asset Generation Conventions
+
+These are presentation production rules, not gameplay implementation.
+
+### 17.1 Sprite Style
+
+- Flat vector.
+- 1 px dark outline: `#10151C`.
+- 2 px shadow where needed.
+- Limited palette.
+- No heavy gradients.
+- No bloom-based readability.
+- No motion blur required.
+- Use simple shapes.
+
+### 17.2 Sprite Sizes
+
+All sprites include padding for VFX.
+
+| Entity | Hitbox | Visual Sprite |
+|---|---:|---:|
+| Player standing | 16 x 24 | 32 x 40 |
+| Player crouching | 16 x 12 | 32 x 28 |
+| Mite Crawler | 16 x 16 | 24 x 24 |
+| Dredge Drone | 24 x 20 | 32 x 28 |
+| Pincer Bot | 24 x 24 | 32 x 32 |
+| Warden Sentry | 32 x 32 | 40 x 40 |
+| Mist Wraith | 24 x 24 | 32 x 32 |
+| Bolt Golem | 48 x 48 | 64 x 64 |
+| Hush Warden | 64 x 64 | 80 x 80 |
+| Null Relay | 80 x 80 | 96 x 96 |
+| Core | 24 x 24 | 32 x 32 |
+| Heart | 24 x 24 | 32 x 32 |
+| Tuner | 32 x 48 | 40 x 56 |
+| Checkpoint | 32 x 48 | 48 x 64 |
+| Conduit | 64 x 96 | 96 x 128 |
+
+### 17.3 Animation Timing
+
+- Character animation frame rate: 12 frames/s.
+- VFX frame rate: 24 frames/s.
+- UI animation frame rate: 60 frames/s.
+- All loops should be seamless.
+
+### 17.4 Tile Textures
+
+Tile size: 32 x 32.
+
+Textures should use:
+
+- 1 px border.
+- 2-3 shades of the base material.
+- Subtle 1-2 px noise.
+- No fine detail smaller than 2 px.
+
+Tile types:
+
+- Solid floor.
+- Solid wall.
+- One-way platform.
+- Conveyor right.
+- Conveyor left.
+- Spike base.
+- Boss floor.
+- Skyloom shelf.
+- Sumpworks pipe.
+
+Why:
+
+> At 960 x 540, small details disappear. Larger shapes read better.
+
+---
+
+## 18. Important UX Decisions and Rationale
+
+### 18.1 Why Cyan Means Safety?
+
+Cyan is used for:
+
+- Player.
+- Checkpoints.
+- Conduit.
+- Active UI.
+- Player projectiles.
+
+Why:
+
+> The player should instinctively trust cyan. It is the color of the restored signal.
+
+### 18.2 Why Red Means Danger?
+
+Red is used for:
+
+- Enemy projectiles.
+- Spikes.
+- Boss energy.
+- Locked objectives.
+- Damage feedback.
+
+Why:
+
+> Red is the fastest visual warning. The player should recognize it before consciously reading shapes.
+
+### 18.3 Why Amber Means Tuner and Sifter?
+
+Amber is used for:
+
+- Tuner shards.
+- Sifter.
+- Bloom energy.
+- Some warning highlights.
+
+Why:
+
+> Amber is warm but not as aggressive as red. It feels like special signal power.
+
+### 18.4 Why No Damage Numbers?
+
+There are no damage numbers.
+
+Why:
+
+> The game has a simple heart system and clear weapon identities. Damage numbers would add clutter without improving core decision-making.
+
+### 18.5 Why No Minimap?
+
+There is no in-stage minimap.
+
+Why:
+
+> Stages are linear or mostly linear. The objective arrow and Conduit visuals are enough. A minimap would compete with HUD space.
+
+### 18.6 Why No Core Text Notification?
+
+Core collection updates the HUD counter but does not show a bottom-center text notification.
+
+Why:
+
+> Cores are optional and frequent. The notification area is reserved for checkpoints, unlocks, and boss phases.
+
+### 18.7 Why No Heavy Screen Effects?
+
+The game avoids:
+
+- Heavy blur.
+- Full-screen flash.
+- Constant screen shake.
+- Chromatic aberration.
+- Damage numbers.
+- Blood.
+- Voice lines.
+
+Why:
+
+> The core fantasy is a tight run-and-gun courier game. Readability is more important than cinematic intensity.
+
+### 18.8 Why Mouse Crosshair Is Required?
+
+Mouse aiming is a core control.
+
+Why:
+
+> The player needs a visible aiming point. The OS cursor is inconsistent and can be hidden by UI.
+
+### 18.9 Why Boss Telegraphs Are World Objects?
+
+Boss beam and charge telegraphs appear in the world, not just HUD.
+
+Why:
+
+> Telegraphs must be aligned to the actual damage area. A HUD warning would not tell the player where to move.
+
+### 18.10 Why World 2 Uses the Same Shapes?
+
+World 2 enemies and objects use the same basic shapes as World 1, only with palette and environmental changes.
+
+Why:
+
+> The player should not have to relearn enemy roles in World 2. The challenge comes from layout, wind, verticality, and stronger patterns.
+
+---
+
+## 19. Final Visual Checklist
+
+A stage is visually complete when:
+
+- The player can identify the player character immediately.
+- The player can identify their active weapon.
+- Enemy projectiles are visually distinct from player projectiles.
+- Spikes are visible from at least 3 tiles away.
+- One-way platforms have a clear top edge.
+- Wind zones show direction.
+- Conveyors show direction.
+- Checkpoints have clear active/inactive states.
+- Conduit has clear locked/active states.
+- Cores, hearts, and tuners are visually distinct.
+- Boss telegraphs are visible against both world palettes.
+- HUD does not cover important gameplay.
+- Crosshair is visible in Stage state.
+- Damage feedback is clear but readable.
+- Stage start, pause, summary, game over, and end are visually distinct.
+- Music and SFX match the event.
+- World 1 and World 2 feel distinct but coherent.
+- No visual element creates unfair ambiguity.
+</visual.md>

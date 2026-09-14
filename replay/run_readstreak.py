@@ -2,9 +2,14 @@
 
     python run_readstreak.py <run_dir> <build_id> <position> [turns] [k] [arms]
 
-`branch.run` restores only the dsh arm, so the patch is installed and removed here and the branch
-is handed `install=None`.
+The patch is installed and removed here around the whole k-loop, so the branch is handed neither
+`install` nor `restore`.
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import json
 import sys
@@ -12,8 +17,8 @@ import time
 from pathlib import Path
 
 import arms_readstreak
-import branch
-import direct
+from lib.replay import branch
+from lib.replay import direct
 
 direct.install()
 

@@ -12,11 +12,17 @@ If the rate drops with it gone, the nudge is not merely ineffective — it is ca
 to resample the turn rather than to tell the model it failed.
 """
 
+
 from __future__ import annotations
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import Dict, List
 
-import probe
+from lib.replay import probe
 
 CUT_OFF = "cut off by the output token limit"
 

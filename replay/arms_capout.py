@@ -10,11 +10,17 @@ a tool call out of the model, and at what token cost. An arm that produces a cal
 nothing real is not a win, so the programs are kept for reading.
 """
 
+
 from __future__ import annotations
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import Dict, List
 
-import probe
+from lib.replay import probe
 
 ONE_UNIT = (
     "\n\nWrite ONE function or one section now, not the file. Call write_file or edit_file with it, "

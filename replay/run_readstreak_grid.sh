@@ -1,8 +1,8 @@
 #!/bin/bash
 # Six fire points from four prod builds. nudge-floor differs from nudge only where the build had
 # not yet written anything, so it is run on the three orientation positions only.
-cd ~/Documents/Labs/replay
-export PYTHONPATH=/home/nick/Documents/ai-agent-test/src
+cd "$(dirname "$0")"
+export PYTHONPATH=..
 C=/home/nick/output/replay-corpus
 K=3
 T=12

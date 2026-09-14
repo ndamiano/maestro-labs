@@ -7,6 +7,11 @@ line_template is the fix note's thrown-error line with {threw} in it, copied fro
 play_fix_note.txt once the gate carries it.
 """
 
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
 import re
 import sys
@@ -14,8 +19,8 @@ import time
 from pathlib import Path
 
 import arms_fixopen
-import branch
-import direct
+from lib.replay import branch
+from lib.replay import direct
 
 direct.install()
 
@@ -33,7 +38,7 @@ line_template = sys.argv[4] if len(sys.argv) > 4 else "What the page threw: {thr
 OUT = Path("/home/nick/output/branch-work/fixopen.jsonl")
 BASE = Path("/home/nick/output/branch-work/fixopen-base-" + BUILD[:6] + "/game")
 if not BASE.exists():
-    import replay
+    from lib.replay import replay
     replay.run_to_position(SRC, 0, BASE.parent, before_compaction=True, build=BUILD)
 CAM0 = re.search(r"function updateCamera\(dt\) \{.*?\n\}",
                  (BASE / "js" / "main.js").read_text(encoding="utf-8"), re.S).group(0)

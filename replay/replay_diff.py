@@ -1,5 +1,9 @@
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pathlib import Path
-import replay
+from lib.replay import replay
 import sys
 r = replay.run_to_position(Path(sys.argv[1]), 999, Path(sys.argv[2]))
 for t in r.diverged:

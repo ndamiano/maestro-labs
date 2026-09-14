@@ -1,0 +1,29 @@
+# A. SANITY
+
+- Check: every field a rule reads or writes is in the global context.
+  - Result: closes. Player, stage, progression, input, projectile, enemy, boss, beam, tempSpike, platform, wind, lowClearance, checkpoint, core, heart, tuner, and conduit records are all listed in section 2.2.
+- Check: every place, thing, or kind a rule names is placed by a generator or listed in a roster.
+  - Result: closes. World, stage, weapon, enemy, boss, and object rosters are in section 4. Stage content roster places enemies, cores, hearts, tuners, checkpoints, and conduits for all 10 stages.
+- Check: for every consumable, total placed against total rules can demand along the core loop.
+  - Result: closes.
+    - Cores: 3 per stage, 10 stages, 30 total. allCores test demands 30 and stage content places 30.
+    - Signal Hearts: 1 per stage plus Bolt Golem drops. Stage content places 10 stage hearts. Golem placements are 2 in 2-3, 2 in 2-4, and 1 in 2-5, for 5 drop hearts. Health is optional; no rule requires a minimum pickup count to complete.
+    - Tuners: exactly one Sifter in w1s2, one Lance in w1s4, one Bloom in w2s2, and no others. Weapon unlock rules demand exactly these three tuners.
+    - Checkpoints: at least 1 per stage by validator and stage content roster.
+- Check: every timing pair closes and still bites.
+  - Result: closes with changes listed.
+    - Jump versus required gaps: initial jump -640 and gravity 1800 give about 113 px vertical height and about 170 px horizontal range at 240 px/s. Required gaps are no wider than 4 tiles, which is 128 px. Closes.
+    - Projectile lifetime versus travel: Chirp 950 times 0.7 is 665 px; Sifter 720 times 0.35 is 252 px; Lance 1500 times 0.8 is 1200 px; Bloom main 520 times 0.45 is 234 px. These match their design roles and do not exceed sane stage combat ranges. Closes.
+    - Enemy projectile lifetime versus threat range: Drone 350 times 2.5 is 875 px; Sentry 520 times 1.5 is 780 px; Golem 300 times 3.0 is 900 px; boss Rain 420 times 2.0 is 840 px; Echo 520 times 2.0 is 1040 px plus one bounce. All are readable and avoidable with player speed 240 px/s. Closes.
+    - Beam telegraph versus active: Hush Sweep telegraph 0.8 and active 0.7; Null Side Sweep telegraph 0.8 and active 0.8; Null Phase 3 beams telegraph 0.6 and active 0.6. Player can move or jump during telegraph. Closes.
+    - Switch cooldown versus fire interval: universal switch 0.12 is shorter than every weapon fire interval, so switching does not create impossible gaps. Closes.
+    - Pit distance versus fall speed: 64 px at 1100 px/s is about 0.058 seconds. Pit triggers quickly but is visible from the edge. Closes.
+    - End-condition clock versus expected clear time: target times are not enforced. Completion proof uses `limitMs = max(60000, targetTimeMs * 3)`. This closes and still bites because a stage far slower than triple target time fails. Closes.
+    - Hush Warden base movement: gameplay lacked base speed. Changed by adding 80 px/s base and 88 px/s Phase 2. Closes.
+    - Beam random versus locked: gameplay random Y and engineering all-beams locked conflicted. Changed by ruling: telegraphs lock displayed line; Side Sweep uses random valid Y at telegraph start; other horizontal beams use player Y at telegraph start. Closes.
+    - Death reset: gameplay only required respawn; engineering required dynamic reset. Changed by ruling: full dynamic reset on death with lives remaining. Closes.
+    - Short-stage camera: gameplay clamp and engineering center conflicted. Changed by ruling: center when stage is smaller than viewport, clamp when larger. Closes.
+- Check: every call section 9 makes is in section 8.
+  - Result: closes. Section 9 lists only `game.debug` calls that appear in section 8. Pure utility unit calls are test-only module calls, not game state debug calls.
+- Check: no placeholder in angle brackets remains.
+  - Result: closes. No angle-bracket placeholders remain in this merged spec.

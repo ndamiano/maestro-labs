@@ -1,6 +1,11 @@
-import sys, time
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import time
 from pathlib import Path
-import probe, arms_compaction
+from lib.replay import probe
+import arms_compaction
 
 src = Path(sys.argv[1]); k = int(sys.argv[2]); positions = [int(x) for x in sys.argv[3:]]
 avail = probe.compaction_positions(src)

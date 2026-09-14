@@ -1,6 +1,11 @@
-import sys, time
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import time
 from pathlib import Path
-import probe, arms_turn0
+from lib.replay import probe
+import arms_turn0
 
 k = int(sys.argv[1]); runs = sys.argv[2:]
 allsamples = []

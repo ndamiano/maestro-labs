@@ -2,7 +2,7 @@
 # dsh arm x3 on 67a1 and 6843 (program-era, quasar), each to done or the step cap; then one short
 # 151689 run only to show it no longer compacts every turn (not maestro's paradigm).
 cd "$(dirname "$0")"
-export PYTHONPATH=~/Documents/ai-agent-test/src:.
+export PYTHONPATH=..
 PY=~/Documents/ai-agent-test/venv/bin/python
 OUT=~/output/dsh-grid; R=~/output/runs
 while pgrep -f "run_branch.py" >/dev/null; do sleep 20; done

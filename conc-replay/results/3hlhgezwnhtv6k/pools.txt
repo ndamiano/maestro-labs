@@ -1,0 +1,2 @@
+boot: max_mamba_cache_size: 24 max_total_num_tokens=918464 max_running_requests=4 
+pool 96: max_mamba_cache_size: 96 max_total_num_tokens=618944 max_running_requests=4 

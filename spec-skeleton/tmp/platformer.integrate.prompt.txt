@@ -1,0 +1,1184 @@
+You are the INTEGRATOR on a design team for a browser game an agentic AI will build. Three colleagues each wrote one design of the same request — gameplay.md, visual.md, engineering.md — in parallel, without seeing each other's work. Merge them into ONE build spec that supersedes all three: every number, name and rule in your document wins, and the builder reads only yours. Where the three agree, carry the content over whole; where they disagree, rule, and write the ruling down. Where one of them left a placeholder in angle brackets, fill it from the document that owns that number. Nothing in the three documents is dropped silently: it is carried, ruled on, or listed under a tier.
+
+The spec has these sections, in this order, with these headings:
+
+# 0. SCOPE
+## 0.1 Asked
+A table with requirements that come directly from the user's request, with where each lives in this document.
+| Requirement | Where it lives |
+| --- | --- |
+If the list is sparse after the user's requests, add the requirements that will elevate the game, marked as added.
+
+## 0.2 Decisions
+A table: topic → what gameplay said → what visual said → what engineering said → the ruling and one clause why. One row per disagreement, and one row per choice the request left open that a builder would otherwise have to make. Rulings are final.
+
+## 0.3 Tiers
+T1 is the game that must ship, by system name. Tiers beyond that stage the rest, each item one line and independent of the others, in the order to add them. Every system in section 4 is tagged with its tier where it is specified.
+
+# 1. CONVENTIONS
+## 1.1 Units, axes, frames
+## 1.2 Important conventions
+From engineering.md, ruled against the other two where they conflict: units, axes, origin, camera, the fixed-step loop and the order systems run, the one random source, the controls table.
+
+# 2. CONTRACTS
+## 2.1 Module layout
+## 2.2 Global context
+## 2.3 Module specifics
+From engineering.md, with every field the gameplay records need present in the global context and every function a rule or a test needs present in a module.
+
+# 3. VISUAL SPEC
+The look in one paragraph, then lighting and atmosphere, then the space, then the recipe table, from visual.md; ruled against gameplay where a visual implies a rule.
+
+# 4. GAMEPLAY SPEC
+The game in one paragraph, then the records with their rosters, then one subsection per system made of its rules with the numbers, tagged with its tier; then progression and difficulty; then feel. From gameplay.md, with every number gameplay gave carried as given.
+
+# 5. CHARACTERS
+Silhouettes, animations by name with their motion rules, facings; from visual.md, with the states gameplay's rules need.
+
+# 6. AUDIO
+Generated with the Web Audio API: a table of sound name → recipe (waveform, frequency, duration, envelope) → the rule that plays it. One row per event gameplay's rules and visual's feedback name.
+
+# 7. UX
+HTML and CSS only; the screens as a state machine and the HUD as a table of element → record field → when visible, merged from gameplay's screens and visual's feedback.
+
+# 8. DEBUG API
+From engineering.md, extended with one function per gameplay system that reaches its state directly, and the player's inputs as functions.
+
+# 9. TESTS
+From engineering.md, rewritten against the merged numbers so every check's expected state follows from section 4's rules; every system has at least one check; every call is in section 8. Then the SCREENSHOTS table from visual.md.
+
+# 10. BUILD ORDER
+Milestones from engineering.md, each naming the section-9 check that shows it landed.
+
+# 11. DEFINITION OF DONE
+Header rows, one per line of 0.1, with the checks and screenshot rows under each that make it true. When every header is complete the game is complete.
+
+# A. SANITY
+Re-read sections 2, 4, 8 and 9 and check them here, as a list of the checks made and their result, and FIX the sections above rather than record a failure: every field a rule reads or writes is in the global context; every place, thing or kind a rule names is placed by a generator or listed in a roster; for every consumable, the total placed against the total the rules can demand along the core loop; every timing pair (spawn against clear, drain against refill, travel time against distance at the given speed, the end-condition clock against the expected clear time) closes AND still bites — a clock the player can never hit is changed; every call section 9 makes is in section 8; no placeholder in angle brackets remains. Write "closes" or what was changed.
+
+Carry tables as tables and numbers as numbers. Do not summarize where a colleague wrote the detail; the builder gets the detail only from you.
+
+<request>
+{request}
+</request>
+
+<gameplay.md>
+# 2D, side-scrolling camera locked to a horizontal track with vertical follow and a deadzone; level bounds clamp the viewport.
+
+# 1. THE GAME IN ONE PARAGRAPH
+
+You are Kael, a salvage mechanic fighting through two hostile industrial zones to reclaim the city's power grid. Minute to minute you run, jump, crouch under low pipes, and shoot waves of automated enemies and hazards across scrolling stages. You swap between four salvaged guns on the fly, each with a distinct rhythm—tap-fire, spread, charge-release, lobbed explosion—so combat is a constant decision about spacing, timing, and which tool the current fight demands. Stages are short (45–90 seconds of skilled play) and end with a flagpole-style "extraction point" you must reach; the final stage of each world is a multi-phase boss. You get 3 lives per stage attempt and unlimited retries; dying resets you to the stage start with a full heal but no score bonus. The game has a definitive end: clearing World 2 Stage 5 (the final boss) triggers a victory screen and rolls credits. Between stages you pick your next stage from a world map; you can replay cleared stages for higher score ranks (Bronze/Silver/Gold thresholds per stage). What keeps players coming back after the credits is chasing Gold rank on every stage and finding the 4 hidden "upgrade chips" per world that permanently boost a gun's stat.
+
+# 2. RECORDS
+
+RECORDS: Player, Gun, Enemy, Projectile, Tile, Hazard, BossPhase, Stage, WorldMap, UpgradeChip
+
+**Player**
+- `hp`: integer, 0–100, start 100.
+- `lives`: integer, 0–3, start 3 per stage attempt.
+- `score`: integer, 0+, start 0 (resets per stage attempt).
+- `activeGun`: enum {{scrapPistol, rivetShotgun, coilRifle, flareLauncher}}, start scrapPistol.
+- `speed`: float, px/s, current horizontal velocity, 0.
+- `vx`, `vy`: float, px/s, current velocity components.
+- `grounded`: bool, true when feet touch a solid Tile.
+- `crouching`: bool, true while crouch key held and grounded.
+- `facing`: int, {{−1, +1}}, start +1 (right).
+- `hitTimer`: float, seconds, 0 when invulnerable, ticks down to 0 after taking damage (1.0 s of i-frames).
+- `chargeMeter`: float, 0–1, 0 (only used by coilRifle).
+
+**Gun** (one record per type, player carries all four unlocked)
+- `damage`: integer, per projectile hit.
+- `fireRate`: float, shots/s.
+- `projectileSpeed`: float, px/s.
+- `spreadDeg`: float, degrees of random angular deviation per shot.
+- `magSize`: integer, shots before reload.
+- `reloadTime`: float, seconds.
+- `knockback`: float, px/s applied to enemy on hit.
+- `pierceCount`: integer, enemies a projectile passes through before dying.
+- `aoeRadius`: float, px, explosion radius (0 if none).
+- `chargeMax`: float, seconds to full charge (0 if none).
+- `unlocked`: bool, start false except scrapPistol.
+
+| Gun | damage | fireRate | projSpeed | spreadDeg | magSize | reloadTime | knockback | pierce | aoeRadius | chargeMax | unlock |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Scrap Pistol | 12 | 6.0 | 600 | 2 | 12 | 1.4 | 80 | 0 | 0 | 0 | start |
+| Rivet Shotgun | 9×5 | 1.4 | 450 | 18 | 6 | 2.2 | 220 | 0 | 0 | 0 | W1S2 chest |
+| Coil Rifle | 40 (charged) / 15 (tap) | 2.5 | 900 | 0 | 5 | 2.8 | 140 | 3 | 0 | 1.2 | W1S4 chest |
+| Flare Launcher | 55 | 0.8 | 320 (arc) | 4 | 4 | 3.5 | 300 | 0 | 90 | 0 | W2S2 chest |
+
+**Enemy**
+- `hp`: integer, 1–200.
+- `damage`: integer, contact damage to player.
+- `speed`: float, px/s.
+- `type`: enum {{crawler, turret, drone, shieldTrooper, boss}}.
+- `patrolRange`: float, px, distance from spawn the enemy walks.
+- `aggroRange`: float, px, distance at which enemy targets player.
+- `knockbackResist`: float, 0–1, fraction of knockback absorbed.
+
+| Enemy | hp | damage | speed | patrolRange | aggroRange | knockbackResist |
+|---|---|---|---|---|---|---|
+| Crawler | 30 | 15 | 120 | 80 | 200 | 0.0 |
+| Turret | 50 | 10 (proj) | 0 | 0 | 350 | 1.0 |
+| Drone | 20 | 12 | 160 | 120 | 280 | 0.2 |
+| ShieldTrooper | 80 | 20 | 70 | 60 | 240 | 0.6 |
+| Boss | see BossPhase | — | — | — | — | 1.0 |
+
+**Projectile**
+- `owner`: enum {{player, enemy}}.
+- `vx`, `vy`: float, px/s.
+- `damage`: integer.
+- `pierceLeft`: integer.
+- `aoeRadius`: float, px.
+- `lifetime`: float, seconds, despawn timer (3.0 default).
+
+**Tile**
+- `type`: enum {{solid, platform, slope45, spike, conveyor, breakable}}.
+- `solidity`: bool (true for solid, platform, slope45, conveyor).
+- `hp`: integer (breakable only, 1–3).
+- `conveyorSpeed`: float, px/s (conveyor only, 0 otherwise).
+
+**Hazard**
+- `type`: enum {{spike, steamVent, crushingPiston, electricFloor}}.
+- `damage`: integer per contact.
+- `period`: float, seconds, cycle time (0 for always-on).
+- `activeTime`: float, seconds, portion of period the hazard hurts.
+
+**BossPhase**
+- `hp`: integer, HP in this phase.
+- `pattern`: enum {{sweep, volley, charge, summon}}.
+- `interval`: float, seconds between attacks.
+- `transitionAt`: float, fraction of phase HP remaining that triggers next phase.
+
+**Stage**
+- `id`: string "W1S1" … "W2S5".
+- `width`: float, px (level scroll width).
+- `height`: float, px.
+- `seed`: integer, generator seed.
+- `goldThreshold`: integer, score for Gold.
+- `silverThreshold`: integer.
+- `bronzeThreshold`: integer.
+
+**WorldMap**
+- `worlds`: array of 2 World records.
+- `currentWorld`: int {{1,2}}, start 1.
+- `unlockedStages`: set of stage ids.
+
+**UpgradeChip** (4 per world, hidden in optional side-rooms)
+- `targetGun`: enum {{scrapPistol, rivetShotgun, coilRifle, flareLauncher}}.
+- `statBoost`: enum {{damage+4, fireRate+1, magSize+2, reloadTime−0.4}}.
+- `permanent`: bool, true.
+
+# 3. SYSTEMS
+
+SYSTEMS: Locomotion, Shooting, DamageAndDeath, EnemyAI, BossAI, StageGenerator, ProgressionAndUnlocks, Scoring, TouchControls
+
+## Locomotion
+
+RULES:
+- **Move left/right:** While A/← held, set `Player.vx` toward −280 px/s; while D/→ held, toward +280 px/s. Acceleration 2400 px/s², deceleration (friction) 1800 px/s² when no key held. `Player.facing` matches last horizontal input.
+- **Jump:** When W/↑/Space pressed AND `Player.grounded == true`, set `Player.vy = −520 px/s`. Variable-height: releasing the jump key within 0.18 s of press cuts `vy` to −260 px/s (short hop).
+- **Crouch:** While S/↓ held AND `Player.grounded == true`, set `Player.crouching = true`; hitbox height shrinks from 48 px to 28 px; max speed halves to 140 px/s; jump is disabled while crouching. Releasing S restores height and speed.
+- **Gravity:** `Player.vy` increases by 1600 px/s² each frame while airborne. Terminal velocity 700 px/s.
+- **Conveyor tiles:** Standing on a conveyor adds `Tile.conveyorSpeed` (±120 px/s) to `Player.vx` each frame.
+- **Platform (one-way):** Player passes through from below and sides; lands only when falling onto the top edge.
+- **Breakable tiles:** After 3 projectile hits (`hp` decremented to 0), tile is removed from collision.
+- **Slope45:** Moving right on a 45° up-slope converts horizontal speed to a 45° diagonal at the same magnitude; same for down-slopes. Jump off a slope retains the diagonal velocity direction.
+
+## Shooting
+
+RULES:
+- **Fire:** While fire key (J / left-click / touch-fire button) held AND `Player.activeGun` magazine > 0 AND not reloading, spawn a Projectile at the muzzle (facing direction, 8 px forward from hitbox edge) with the gun's `projectileSpeed`, `damage`, `spreadDeg` applied as random angular jitter. Decrement `magSize`. Repeat at `1/fireRate` intervals (hold-to-fire).
+- **Coil Rifle charge:** If fire key held ≥ 0.25 s, stop auto-firing and begin charging `Player.chargeMeter` from 0→1 over `chargeMax` (1.2 s). Release: fire one projectile with `damage = 15 + 25 × chargeMeter`, `pierceCount = 3`. Tap-fire (release < 0.25 s) fires a normal 15-damage shot.
+- **Flare Launcher arc:** Projectile launches at 45° above facing direction at 320 px/s; gravity 800 px/s² applies; on first contact with any solid surface or enemy, detonate: deal 55 damage in `aoeRadius` 90 px circle, apply `knockback` 300 px/s radially.
+- **Reload:** Automatic when magazine hits 0, or manual on R key. During `reloadTime` the gun cannot fire. Visual: magazine count resets to `magSize`.
+- **Gun swap:** Keys 1/2/3/4 or scroll-wheel cycle `Player.activeGun` among unlocked guns. Swap takes 0.3 s (no fire during swap).
+- **Crouch-fire:** While `Player.crouching == true`, muzzle position drops to the crouched hitbox top (28 px above feet) and `spreadDeg` is halved (more accurate low shot). Cannot jump while firing crouched.
+
+## DamageAndDeath
+
+RULES:
+- **Player takes damage:** On contact with an enemy hitbox or enemy Projectile, if `Player.hitTimer == 0`: subtract enemy/projectile `damage` from `Player.hp`; set `Player.hitTimer = 1.0`; apply 180 px/s knockback away from source. While `hitTimer > 0` the player is invulnerable.
+- **Player dies:** If `Player.hp ≤ 0`: decrement `Player.lives`. If `lives > 0`, respawn at stage start (or nearest checkpoint flag) with `hp = 100`, `hitTimer = 1.5` (longer i-frames), score carries. If `lives == 0`, return to Stage Select.
+- **Enemy dies:** Enemy `hp ≤ 0` → remove enemy, add its score value to `Player.score` (Crawler 100, Turret 200, Drone 150, ShieldTrooper 350). Drop chance: 20 % for a small ammo pickup (refills current gun mag by 3), 8 % for a health orb (+15 hp).
+- **Hazard damage:** Touching a spike/steam/piston/electricFloor deals its `damage` (spike 20, steam 12, piston 30, electric 18) once per `hitTimer` window.
+- **Fall death:** If `Player.y > Stage.height + 200 px`, instant death (same as hp ≤ 0 but no knockback).
+
+## EnemyAI
+
+RULES (per-frame, each enemy independently):
+- **Perception:** Enemy checks Euclidean distance to `Player` center. If ≤ `aggroRange`, state = CHASE; else state = PATROL.
+- **Crawler PATROL:** Walk `speed` px/s toward nearest edge of `patrolRange`; reverse at boundary. CHASE: run toward player at `speed × 1.4`. Contact deals `damage`.
+- **Turret:** Stationary. CHASE: aim at player (no LOS check for simplicity), fire a Projectile (damage 10, speed 300) every 1.8 s. Cannot be knocked back (`knockbackResist 1.0`).
+- **Drone:** Hovers at `Player.y − 60 px` (stays above). PATROL: sinusoidal bob (±30 px, period 2 s). CHASE: drift toward player at `speed`; contact deals `damage`. Can be hit only by projectiles fired above 20° or by jump-contact.
+- **ShieldTrooper:** PATROL: walk slowly. CHASE: advance toward player at `speed`; front-facing arc (±60°) blocks all projectiles (damage redirected to shield, shield has 60 hp separate pool). Shield breaks → normal hit. Attacks with a 1-s wind-up lunge (30 px/s for 0.5 s) dealing `damage` on contact.
+- **Knockback on enemy:** Apply `Gun.knockback × (1 − Enemy.knockbackResist)` as instantaneous vx impulse away from projectile direction.
+
+## BossAI
+
+RULES:
+- A boss is a BossPhase sequence. Each phase has its own `hp` pool; when phase hp reaches `transitionAt` fraction, boss flashes (1.5 s invulnerable) and advances to next phase.
+- **World 1 Boss "Rust Colossus":** 3 phases (HP 200/200/200).
+  - Phase 1 (sweep, interval 2.5 s): walks back and forth across a 400 px arena, swinging arm (hitbox 60 px wide, damage 25).
+  - Phase 2 (volley, interval 3.0 s): stops, fires 5 projectiles in a fan (damage 12 each, speed 280).
+  - Phase 3 (charge + summon, interval 2.0 s): telegraphs 1 s then dashes at 500 px/s across arena (damage 35); every 6 s summons 2 Crawlers.
+- **World 2 Boss "Core Warden":** 4 phases (HP 180/180/180/180).
+  - Phase 1: laser sweep (horizontal beam, 2 s active, damage 20/s contact).
+  - Phase 2: volley of 8 homing drones (damage 15, speed 180, lifetime 4 s).
+  - Phase 3: floor electrification (entire arena floor is electricFloor for 3 s, period 5 s); player must jump onto floating platforms.
+  - Phase 4: all three attacks in rotation, interval 1.5 s.
+- Boss is immune to knockback. Must be damaged from any angle.
+
+## StageGenerator
+
+SEEDED GENERATOR for each Stage record:
+- **Inputs:** `Stage.seed`, `Stage.width` (default 4800 px for normal, 1200 px for boss), `Stage.height` (default 720 px), `worldTheme` (W1 = industrial pipes/catwalks; W2 = cave/underground), `difficultyTier` (1–5, = stage number within world).
+- **Placement order:**
+  1. **Ground layer:** Lay solid tiles along the bottom (y = height−48). Insert gaps of width 3–6 tiles at intervals of 8–14 tiles (more gaps at higher tier). Place a breakable tile in 15 % of gaps.
+  2. **Platform tier:** At every 6–10 tile interval, place a platform (one-way) at y = height−144 or height−240. Width 3–7 tiles.
+  3. **Hazard scatter:** Place spikes on 10–20 % of ground tiles (never within 2 tiles of a gap edge). Place 1 steamVent per 12 tiles of ground (period 3 s, activeTime 1.5 s). At tier ≥ 3 add crushingPiston (period 4 s, activeTime 1.0 s).
+  4. **Enemy spawn points:** One enemy every 10–16 tiles. Tier 1: Crawlers only. Tier 2: add Turrets. Tier 3: add Drones. Tier 4: add ShieldTroopers. Tier 5: mix all.
+  5. **Chest / pickup:** One gun-unlock chest per designated stage (hard-coded stage ids). One health orb every 20 tiles.
+  6. **Extraction point:** Place at x = width − 120 px, a tall flagpole tile. Reaching it ends the stage.
+  7. **Hidden side-room (UpgradeChip):** In stages 1, 3 of each world, place a breakable wall at a random ground position; behind it a 200×120 px room containing the UpgradeChip.
+- **VERIFIER:** Run after generation:
+  - Every gap is crossable: max gap width ≤ 6 tiles AND a platform exists within 12 px vertical and 120 px horizontal of any gap edge.
+  - No enemy spawns inside a solid tile.
+  - No hazard overlaps the extraction point (≥ 200 px clearance).
+  - Player can reach the extraction point from the start (BFS on walkable+jumpable graph, max jump height 120 px, max jump distance 180 px).
+  - If any check fails → re-roll with `seed + 1`.
+
+## ProgressionAndUnlocks
+
+RULES:
+- **WorldMap starts** with W1S1 unlocked. Clearing a stage unlocks the next stage in sequence. Clearing W1S5 unlocks W2S1. Clearing W2S5 triggers victory.
+- **Gun unlock chests** are hard-placed: W1S2 → Rivet Shotgun; W1S4 → Coil Rifle; W2S2 → Flare Launcher. Opening the chest sets that Gun's `unlocked = true` permanently (persists across deaths within the run; resets on full game restart).
+- **UpgradeChips** (4 per world): permanently modify the target gun's stat for the rest of the run.
+- **Checkpoints:** Each stage has 1 mid-stage checkpoint flag. Reaching it saves position for respawn after death (but not after a full game-over/lives-0).
+
+## Scoring
+
+RULES:
+- Points: Crawler 100, Turret 200, Drone 150, ShieldTrooper 350, Boss-phase-clear 1000.
+- Speed bonus: if stage completed in ≤ 60 % of par time (par = width/200 seconds), add 500.
+- No-damage bonus: +1000 if `Player.hp == 100` at extraction.
+- Chip bonus: +250 per UpgradeChip collected.
+- Rank thresholds per stage are in Stage record (`bronzeThreshold`, `silverThreshold`, `goldThreshold`). Displayed on stage-complete screen.
+
+## TouchControls
+
+RULES:
+- Left half of screen: virtual D-pad (left, right, down=crouch). Up swipe on left half = jump.
+- Right half: tap = fire (hold = auto-fire / charge for coil). Swipe up on right half = jump (redundant with left swipe).
+- Bottom-right corner: circular gun-swap button (cycles unlocked guns).
+- Bottom-left corner: reload button.
+- All touch inputs map to the same rule IDs as keyboard; no separate tuning.
+
+## Keyboard Bindings
+
+RULES:
+- Move: A / ← (left), D / → (right).
+- Jump: W / ↑ / Space.
+- Crouch: S / ↓.
+- Fire: J / left-mouse.
+- Reload: R.
+- Gun swap: 1 / 2 / 3 / 4, or mouse-scroll.
+- Pause: P / Escape.
+
+# 4. PROGRESSION AND DIFFICULTY
+
+**Progression order:**
+W1S1 → W1S2 (shotgun) → W1S3 → W1S4 (coil rifle) → W1S5 (Rust Colossus) → W2S1 → W2S2 (flare launcher) → W2S3 → W2S4 → W2S5 (Core Warden) → Victory.
+
+**Early-game ease (W1S1–S2):**
+- Only Crawlers (hp 30, one shot with pistol at 12 dmg × 3 hits). No turrets, no drones.
+- Ground is mostly continuous; gaps are 3 tiles wide (easy jump).
+- Player has 3 lives; first death is a learning moment, not a wall.
+- Scrap Pistol: 6 shots/s, 12 dmg, 12-round mag → trivially kills crawlers.
+
+**Mid-game (W1S3–S4, W2S1–S3):**
+- Turrets force positioning (can't rush through). Drones punish staying on ground.
+- ShieldTroopers demand shotgun (break shield fast) or coil rifle (pierce through).
+- Gaps widen to 5–6 tiles; steam vents and pistons add timing pressure.
+- Player is expected to die once or twice per stage; checkpoints soften this.
+
+**Late-game / Boss (W1S5, W2S5):**
+- Rust Colossus Phase 3 requires using all 3 guns: pistol to clear summoned crawlers, shotgun to stagger the dash, coil rifle for the 3-pierce volley window.
+- Core Warden Phase 3 (floor electrification) forces platforming under fire; Phase 4 demands gun-swaps mid-fight.
+- Boss HP pools (200/180 per phase) mean ~15–20 hits per phase with mid-tier guns; the fight lasts 60–90 s of skilled play.
+
+**Recovery on failure:**
+- Death within a stage: respawn at checkpoint (or start) with full HP, 1.5 s i-frames, score kept. Lose 1 life.
+- All lives lost: return to Stage Select. No penalty beyond lost time; stage is immediately retryable.
+- No permadeath, no lives between stages (3 lives reset each stage attempt).
+
+**Difficulty scaling knobs:**
+- `difficultyTier` (1–5) controls: enemy density (one per 16→10 tiles), gap width (3→6 tiles), hazard count, enemy mix.
+- Boss intervals shrink per phase (2.5 s → 1.5 s).
+- UpgradeChips provide the player's own scaling: +4 damage or +1 fireRate on a gun makes late content noticeably more comfortable.
+
+# 5. FEEL
+
+| Parameter | Value | Tuned to achieve |
+|---|---|---|
+| Player run speed | 280 px/s | Fast enough to clear 4800 px stages in ~25 s at full sprint; feels snappy, not floaty. |
+| Player acceleration | 2400 px/s² | Reaches top speed in ~0.12 s; responsive direction changes. |
+| Friction / decel | 1800 px/s² | Stops in ~0.16 s; crisp, not icy. |
+| Jump initial vy | −520 px/s | Peak height ≈ 84 px (≈ 2 tile-heights); clears 3-tile gaps at full speed. |
+| Variable jump cut | 0.18 s window / −260 vy | Short-hop to 30 px for precise platforming; full jump for gaps. |
+| Gravity | 1600 px/s² | Hang-time ≈ 0.65 s total; not floaty, not snappy-to-unfair. |
+| Crouch height | 48 → 28 px | Fits under 32-px pipe gaps; feels like squeezing. |
+| Crouch speed | 140 px/s (half) | You're mobile but vulnerable; encourages standing to fight. |
+| Hit i-frames | 1.0 s (0.25 s per tick blink) | Enough to escape, short enough to feel punishing. |
+| Death i-frames | 1.5 s | Grace on respawn so you don't re-die instantly. |
+| Scrap Pistol fire rate | 6.0/s | 167 ms between shots; satisfying tap-rap rhythm. |
+| Rivet Shotgun fire rate | 1.4/s | 714 ms; deliberate, heavy pump feel. |
+| Coil Rifle charge time | 1.2 s | Long enough to feel risky; short enough to use in a 2-s window. |
+| Flare Launcher fire rate | 0.8/s | 1.25 s; each shot is an event, a commitment. |
+| Knockback (shotgun on crawler) | 220 px/s × 1.0 = 220 px/s | Sends a crawler tumbling ~0.3 s; visceral. |
+| Knockback (pistol on crawler) | 80 px/s | Small nudge; doesn't trivialize spacing. |
+| Enemy contact knockback (on player) | 180 px/s | Pushes you back ~0.25 s; enough to recover, not to fall off a ledge unfairly. |
+| Projectile lifetime | 3.0 s | Covers ~1800 px at pistol speed; disappears before cluttering. |
+| Reload times | 1.4–3.5 s | Pistol reloads fast (keep pressure); flare is slow (commit to the shot). |
+| Gun swap time | 0.3 s | Quick enough to feel fluid; prevents instant weapon-stacking. |
+| Boss telegraph (Colossus dash) | 1.0 s wind-up | Readable; player can jump/crouch to dodge. |
+| Boss flash (phase transition) | 1.5 s invuln | Breather; signals "new pattern incoming." |
+| Stage par time | width / 200 s (4800/200 = 24 s) | A skilled player finishes in ~20–25 s; Gold is under 60 % of that (≈ 14 s). |
+| Camera deadzone | 80 px horizontal, 60 px vertical | Small enough to always see threats; large enough to avoid jitter. |
+| Camera lerp | 0.12 per frame (60 fps) | Smooth follow without rubber-banding. |
+| Touch fire button radius | 72 px | Comfortable thumb target on a 6" phone. |
+
+# 6. HUD AND SCREENS
+
+**Screen state machine:**
+
+Title → (Enter / tap "Start") → WorldMap → (select unlocked stage) → StageIntro (1.5 s "W1-S1" card) → Gameplay → (reach extraction) → StageComplete (score, rank, unlocks) → WorldMap
+Gameplay → (lives hit 0) → GameOver → (Enter) → StageSelect (same stage, lives reset to 3)
+Gameplay → (clear W2S5 boss) → Victory (credits roll 30 s) → Title
+Any Gameplay / WorldMap → (Escape / P) → Pause → (Resume / Restart Stage / Quit to Map)
+
+**Key/button mappings on screens:**
+- Title: Enter / Space / tap → WorldMap.
+- WorldMap: ←→ / A D move cursor between stages (only unlocked selectable). Enter / tap → StageIntro. Escape → Title.
+- Gameplay: as in §3 Keyboard Bindings. Escape / P → Pause.
+- Pause: Enter → Resume. R → Restart Stage. Q / Escape → WorldMap.
+- StageComplete: Enter → WorldMap (next stage highlighted).
+- GameOver: Enter → restart same stage.
+- Victory: auto-return to Title after 30 s, or Enter to skip.
+
+**HUD (visible during Gameplay only):**
+
+| HUD element | Record field shown | Visibility |
+|---|---|---|
+| HP bar (top-left, 100-segment bar) | `Player.hp` | Always |
+| Life icons (3 small skulls) | `Player.lives` | Always |
+| Score counter (top-center) | `Player.score` | Always |
+| Active gun name + icon (top-right) | `Player.activeGun` | Always |
+| Magazine counter (e.g. "8/12") | current gun `magSize` remaining | Always; flashes red at ≤ 2 |
+| Reload arc (circular progress under mag) | reload timer fraction | Only during reload |
+| Charge meter (bar under crosshair area) | `Player.chargeMeter` | Only while Coil Rifle charging |
+| Stage timer (small, bottom-left) | elapsed seconds since stage start | Always |
+| Boss HP bar (replaces timer, centered top) | current BossPhase.hp / max | Only during boss stage, only while boss alive |
+| Checkpoint indicator (small flag icon) | checkpoint reached bool | Fades in after touching checkpoint |
+</gameplay.md>
+
+<visual.md>
+# VISUAL DESIGN — "FORGE BREAKER"
+
+**2D side-scroller. Fixed horizontal follow-camera, player offset ~35% from left edge, vertical deadzone of 80 units; camera tracks player X at 8% per frame and Y at 12% per frame. No rotation. No zoom except a 1.15× punch on screen-shake triggers.**
+
+---
+
+# 1. THE LOOK IN ONE PARAGRAPH
+
+A vast abandoned mega-factory rendered in thick, confident vector shapes with a warm-to-cool duotone palette: deep charcoal (#1A1A2E) foundations, hot molten amber (#FF8C00) and electric cyan (#00F5FF) accent lighting, and bruised violet (#4A1A6B) midtones. Everything reads as heavy industrial machinery — riveted plate, dripping coolant, spinning gears, hissing valves — but stylised into clean geometric silhouettes with 3-px dark outlines. The one screenshot that sells the game: the player mid-air, crouched-then-jumping over a conveyor belt of glowing ore, muzzle-flash of a scatter cannon painting the scene amber, two rivet-drones exploding into sparks behind, and the parallax background showing three receding layers of factory architecture fading into violet haze.
+
+---
+
+# 2. THE SPACE
+
+**Stage dimensions:** Each stage is a horizontal strip, 4 800 units wide × 1 200 units tall. Camera viewport is 960 × 540 units. Player starts at X = 120, Y = ground level (Y = 1 080 in World 1 stages, Y = 1 040 in World 2 stages). Goal exit is always at X ≈ 4 600–4 700, a blast-door or teleport pad.
+
+**Regions per stage (5 zones, each ~900 units wide):**
+
+| Zone | World 1 (Smelting Yards) | World 2 (Cooling Towers) | Eye-cue |
+|---|---|---|---|
+| 1 – Entry | Loading dock, forklifts, crate stacks | Airlock vestibule, frost-rimmed pipes | Warm floor glow vs. cold blue floor glow |
+| 2 – Gauntlet | Conveyor belts, piston platforms, slag pits | Cryo-tunnels, slippery ice plates, vent shafts | Moving horizontal elements vs. vertical ice columns |
+| 3 – Combat | Smelter floor: molten channels, crane hooks | Coolant reservoir: floating debris, submersible pods | Orange light pools vs. cyan light pools on floor |
+| 4 – Puzzle | Gear-maze, pressure-plate bridges | Thermal-exchange puzzle, colour-coded valve doors | Mechanical rotating cogs vs. liquid-flow pipes |
+| 5 – Exit | Blast furnace core, heat-shimmer | Central chiller, frozen fountain | Red/amber ambient shift vs. blue/white shift |
+
+**World differentiation:** World 1 palette skews amber/red/charcoal; World 2 skews cyan/white/deep-blue. Floor tile texture differs (riveted steel plate vs. frosted ceramic tile). Background parallax layers change content (smokestacks & gears vs. condensation towers & water pipes).
+
+**Stage 5 of each world** is a boss arena: a single wide room (2 400 × 1 200) with no side-scrolling; camera locks.
+
+**Procedural note:** Stage layouts are hand-authored per stage (10 total). No procedural generation. A "good" stage roll means: at least 2 vertical platforming sequences per zone, at least 1 gun-pickup visible in zones 2 and 4, and a clear silhouette read of the exit door from the start of zone 5. A "bad" roll: player cannot see the next platform's landing spot due to foreground prop overlap, or zone boundaries are ambiguous (no colour/light shift).
+
+---
+
+# 3. RECIPES
+
+## Tiles & Environment
+
+| Name | Shape / Construction | Size (units) | Colours (hex) | Count / Stage | Motion / Effect |
+|---|---|---|---|---|---|
+| Ground plate (W1) | Rounded rect, 3px stroke #0D0D1A, fill gradient #2A2A3E→#1A1A2E, rivet dots every 60u | 80 × 40 | #2A2A3E, #1A1A2E, #0D0D1A | ~120 | Static |
+| Ground plate (W2) | Same rect, fill #1E3A5F→#0F1F33, frost crystal overlay (3 small white triangles) | 80 × 40 | #1E3A5F, #0F1F33, #FFFFFF | ~120 | Static |
+| Platform (floating) | Rounded rect, fill #3D2B5F, top-edge highlight line #FF8C00 (W1) / #00F5FF (W2) | 120 × 24 | #3D2B5F, accent per world | ~40 | Bob ±4u sine, 2s period |
+| Conveyor belt | Rect with scrolling diagonal-stripe texture (45° stripes, 20px spacing) | 200 × 32 | #1A1A2E base, #FF8C00 stripes (W1) / #00F5FF (W2) | ~8 | Stripe-scroll 60u/s |
+| Piston platform | Rect + cylindrical stem below | 100 × 20 + 20×60 stem | #4A4A5E, #2A2A3E | ~6 | Vertical extend/retract, 1.5s cycle |
+| Slag pit (W1) | Wavy-top rect, inner glow | 160 × 40 | #FF4500 core, #FF8C00 glow, #1A0A00 rim | ~4 | Heat shimmer (2px vertical sine on top edge, 0.5s) |
+| Ice plate (W2) | Rect with 2 crack lines, translucent | 120 × 16 | #A8E6FF 70% opacity, #FFFFFF cracks | ~5 | Static; shatters on stomp (see Feedback) |
+| Wall / backdrop panel | Tall rect, riveted, 2px stroke | 80 × 300 | #1A1A2E, stroke #0D0D1A | ~30 | Static |
+| Pipe (horizontal) | Rounded rect 16u tall, joint circles every 100u | variable × 16 | #3D3D5E, joints #FF8C00 (W1) / #00F5FF (W2) | ~15 | Static |
+| Pipe (vertical) | Same rotated | 16 × variable | same | ~10 | Static |
+| Blast door (exit) | Arch-top rect, 2 halves, gear motif in center | 140 × 200 | #2A2A3E, gear #FF8C00 (W1) / #00F5FF (W2), stroke #0D0D1A | 1 | Opens: halves slide apart 0.6s ease-out |
+| Teleport pad (alt exit) | Ellipse + 3 concentric rings | 100 × 30 | #00F5FF rings, #4A1A6B center | 1 (some stages) | Ring-pulse outward 1.2s loop |
+
+## Props & Decor
+
+| Name | Shape | Size | Colours | Count | Motion |
+|---|---|---|---|---|---|
+| Crate stack | 2–3 offset rounded rects, X-brace lines | 50×50 each | #4A3520, #2A1F10, stroke #1A0F05 | ~12 | Static; can be destroyed (see Feedback) |
+| Gear (wall-mounted) | 8-tooth circle, inner hole | 80 dia | #3D3D5E, teeth #4A4A5E | ~10 | Rotate 30°/s (some reverse) |
+| Valve wheel | Circle + 4 spokes | 50 dia | #FF8C00 (W1) / #00F5FF (W2), rim #1A1A2E | ~8 | Static; glows when near |
+| Steam vent (W1) | Small rect + rising particle emitter | 24 × 12 | #2A2A3E base | ~10 | Emit 3 white particles/s, rise 40u, fade |
+| Frost drip (W2) | Small icicle triangle | 12 × 20 | #A8E6FF | ~10 | Static; drip particle every 2s |
+| Warning sign | Triangle + exclamation | 30 × 30 | #FFD700, stroke #1A1A2E | ~6 | Flash 1s on/off when player within 200u |
+| Conveyor roller | Circle at belt ends | 24 dia | #4A4A5E, axle #FF8C00 | pairs | Rotate 90°/s |
+| Crane hook | Arc + line + triangle hook | 40 × 80 | #3D3D5E, hook #FF8C00 | ~4 | Swing ±15° sine, 3s |
+
+## Characters (Player + Enemies)
+
+| Name | Shape / Silhouette | Size | Colours | Count | Motion |
+|---|---|---|---|---|---|
+| **Player (idle)** | Rounded-rect torso, circle head with visor slit, stubby legs, arm holding gun | 36 × 56 | Suit #2A2A3E, visor #00F5FF, accents #FF8C00, boots #1A1A2E | 1 | Subtle 2u vertical bob, 1.5s |
+| **Player (crouch)** | Same, torso squished to 60% height, legs folded | 36 × 36 | same | 1 | Static |
+| **Player (run)** | Torso leaned 10° forward, legs in 4-frame cycle | 36 × 56 | same | 1 | See §5 |
+| **Player (jump)** | Legs tucked, arms up, slight squash-stretch | 36 × 56 | same | 1 | See §5 |
+| **Player (hurt)** | Same as idle, body flashes white | 36 × 56 | flash #FFFFFF | 1 | 3-frame flash cycle |
+| **Rivet Drone** | Small hexagon body, 2 eye dots, single rotor on top | 28 × 28 | #4A4A5E, eyes #FF4500, rotor #A8E6FF | 8–14/stage | Hover bob ±6u, rotor spin 360°/s |
+| **Rivet Drone (firing)** | Same + muzzle flash triangle | 28 × 28 | flash #FFD700 | — | 0.1s flash |
+| **Smelter Bot (W1)** | Wide squat rect torso, 2 stubby arms, furnace-glow chest | 48 × 44 | #1A1A2E, chest glow #FF4500→#FF8C00 gradient | 4–6/stage | Chest pulse 1s |
+| **Cryo Stalker (W2)** | Tall narrow rect, 4 thin legs, frost-crystal head | 32 × 52 | #0F1F33, crystal #A8E6FF, eyes #00F5FF | 4–6/stage | Leg scuttle, head tilt ±10° |
+| **Boss – Furnace Colossus (W1-5)** | Massive: 160×200, furnace torso, 2 hydraulic arms, smokestack head | 160 × 200 | #1A0A00 body, #FF4500 core, #FF8C00 arms, smokestack #3D3D5E | 1 | Arm swing, core pulse, smoke |
+| **Boss – Absolute Zero (W2-5)** | Tall 120×220, crystalline humanoid, 4 floating ice shards orbiting | 120 × 220 | #0F1F33, #A8E6FF shards, #00F5FF eyes | 1 | Shard orbit 120°/s, body float ±8u |
+
+## Weapons (held by player, drawn at arm-tip)
+
+| Name | Shape | Size (units) | Colours | Motion / Effect |
+|---|---|---|---|---|
+| **Pulse Pistol** | Small L-shape (barrel + grip), cyan tip | 18 × 12 | #3D3D5E body, #00F5FF barrel-tip | Muzzle flash: 10u cyan circle, 0.08s |
+| **Scatter Cannon** | Wide double-barrel, shotgun profile | 24 × 16 | #4A3520 body, #FF8C00 barrel-ends | Muzzle flash: 20u amber star, 0.12s; 3-pellet spread |
+| **Rail Driver** | Long thin barrel (60% of body height), glowing rail line | 32 × 10 | #1A1A2E body, #00F5FF rail glow | Charge: rail line brightens 0.3s; fire: 200u cyan beam, 0.1s |
+| **Acid Sprayer** | Bulbous nozzle + hose coil behind | 22 × 18 | #2A4A1A body, #7FFF00 nozzle | Spray: 5–8 green droplet circles, arc trajectory, 0.5s lifetime |
+| **Plasma Lance** | Staff-like, glowing orb at tip | 28 × 8 | #4A1A6B shaft, #FF8C00 orb | Orb pulses 0.5s; fire: expanding ring 0.15s |
+
+## Pickups & Effects
+
+| Name | Shape | Size | Colours | Count | Motion |
+|---|---|---|---|---|---|
+| Ammo crate | Small rect, icon of weapon on face | 30 × 24 | #2A2A3E, icon colour = weapon accent | 6–10/stage | Float bob ±3u, 1s; glow outline 2px weapon colour |
+| Health cell | Cross inside circle | 24 × 24 | #FF4500 cross, #FFFFFF circle, #1A1A2E stroke | 3–5/stage | Pulse scale 1.0→1.1, 1s |
+| Weapon pickup | Ammo crate + spinning icon above | 30 × 36 | weapon colour | 1–2 per stage (new guns) | Icon spin 180°/s |
+| Coin / credit | Small circle with inner ring | 16 × 16 | #FFD700, inner #FFA500 | 20–40/stage | Spin: ellipse squash/stretch, 0.8s |
+| Bullet (player) | Small circle or line-segment | 4–6 | weapon colour, 80% opacity trail | per shot | Linear travel |
+| Bullet (enemy) | Small circle | 6 | #FF4500, trail #FF4500 40% | per shot | Linear travel |
+| Explosion (small) | Expanding circle + 6–8 spark lines | 40 → 80u | #FFD700 core → #FF4500 → transparent | on enemy death | 0.3s expand-fade |
+| Explosion (large) | Expanding circle + 12 sparks + smoke puffs | 80 → 200u | #FF4500 → #1A1A2E smoke | boss hit, crate destroy | 0.5s |
+| Screen flash | Full-viewport rect | 960 × 540 | #FFFFFF 60% opacity | on boss death | 0.15s |
+
+## UI Surfaces
+
+| Name | Shape | Size | Colours | Position |
+|---|---|---|---|---|
+| HUD bar | Rounded rect, semi-transparent | 400 × 48 | fill #0D0D1A 70%, stroke #3D3D5E | Top-left, 16u margin |
+| Health bar (inside HUD) | Rect + segmented fill | 120 × 12 | bg #1A1A2E, fill #FF4500→#FFD700 (low→full) | Inside HUD, left |
+| Ammo counter (inside HUD) | Text + small weapon icon | 80 × 16 | #00F5FF text, #3D3D5E icon | Inside HUD, right |
+| Weapon name tag | Small text label | auto | #FF8C00 | Below HUD bar |
+| Stage title card | Full-width banner text | 960 × 80 | Text #FFFFFF, bg fade #0D0D1A→transparent | Center screen, 2s fade-in/out |
+| Pause overlay | Full viewport | 960 × 540 | #0D0D1A 80% opacity, text #FFFFFF | Center |
+| Game-over screen | Full viewport | 960 × 540 | #1A0A00 bg, text #FF4500, vignette heavy | Center |
+| World map / stage-select | Grid of 5 circles × 2 rows | 600 × 300 | Circles: completed=#FF8C00, next=#00F5FF pulse, locked=#3D3D5E | Center |
+| Crosshair / aim dot | Small circle + 4 ticks | 16 × 16 | #00F5FF 70% opacity | Follows cursor or auto-aims at nearest enemy |
+
+## Parallax Background Layers (3 layers, all stages)
+
+| Layer | Content | Colour range | Scroll speed |
+|---|---|---|---|
+| Far (sky) | Gradient sky + silhouetted smokestacks / condensation towers | W1: #1A0A00→#4A1A6B; W2: #0F1F33→#1A2A4A | 5% of camera |
+| Mid (factory shell) | Large gear silhouettes, pipe networks, building outlines | W1: #2A1F10→#3D2B5F; W2: #0F1F33→#1E3A5F | 20% of camera |
+| Near (foreground clutter) | Dangling cables, steam wisps, partial pipes at top/bottom edges | #0D0D1A, accent glow | 60% of camera |
+
+---
+
+# 4. LIGHTING AND ATMOSPHERE
+
+**Ambient:** No global light source (2D). Each stage has an ambient tint overlay: World 1 = #FF8C00 at 8% opacity multiply; World 2 = #00F5FF at 6% opacity multiply.
+
+**Point-light sources (drawn as radial-gradient circles, additive blend):**
+
+| Source | Colour | Radius | Count | Motion |
+|---|---|---|---|---|
+| Furnace glow (W1) | #FF4500→transparent | 200u | 3–5/stage | Pulse ±20u, 2s |
+| Coolant lamp (W2) | #00F5FF→transparent | 160u | 3–5/stage | Static, flicker 5% at 8Hz |
+| Muzzle flash (player) | weapon colour→transparent | 40u | on fire | 0.08–0.15s |
+| Enemy eye glow | #FF4500 or #00F5FF | 20u | per enemy | Pulse ±4u, 1.5s |
+| Exit door glow | #FFD700 | 120u | 1 | Pulse ±15u, 2s |
+| Pickup glow | item colour | 30u | per pickup | Static |
+
+**Darkness / fog:** Zones 2 and 4 of each stage have a "shadow corridor" — a vertical band 300u wide where a 60%-opacity #0D0D1A overlay sits, broken only by point-lights. This is purely visual; no gameplay stealth.
+
+**Fog / haze:** Far parallax layer is drawn at 70% opacity. Mid layer at 85%. A horizontal gradient fade (left and right 80u) softens the viewport edges into the background.
+
+**Time-of-day:** Static per stage. No day/night cycle. World 1 stages are "night shift" (dark, lit by furnaces). World 2 stages are "deep underground" (uniform cool glow, no sun).
+
+**Post-effects:**
+
+| Effect | Trigger | Strength / Duration |
+|---|---|---|
+| Vignette | Always on | Radial, edges 35% darker, #0D0D1A |
+| Chromatic aberration | On hit-taken (player) | 2px RGB split, 0.2s |
+| Screen shake | On player hit, enemy explosion, boss slam | 4px random offset, 0.3s decay |
+| Screen shake (heavy) | Boss death, stage completion | 10px, 0.6s |
+| Flash (white) | Player pickup, boss death | Full-screen, 60% opacity, 0.12s |
+| Flash (red) | Player damage | Full-screen, 40% opacity, 0.15s |
+| Heat distortion (W1) | Near slag pits, furnace zones | 2px vertical sine displacement, 0.4s period |
+| Frost bloom (W2) | Near ice plates, coolant zones | Tiny white crystal shapes spawn, fade 1s |
+| Grain | Always on (subtle) | 3% opacity noise texture, 12fps |
+| Slow-mo tint | Boss death final hit | Desaturate to 40%, 0.8s duration |
+
+---
+
+# 5. CHARACTERS AND ANIMATION
+
+## Player — "Forge"
+
+**Silhouette read at a glance:** Broad-shouldered, short-legged, helmeted figure with a single glowing visor slit. Gun always visible at arm. Squishy proportions (head = 30% of height) for readability at small size. Crouch halves the silhouette.
+
+**Facings:** 2 (left, right). No up/down.
+
+**Animations:**
+
+| Name | Frames / Rule | Duration |
+|---|---|---|
+| Idle | 4-frame bob: torso Y offset 0, -2, 0, +2. Visor pulses glow. | 1.5s loop |
+| Run | 4-frame leg cycle (contact, down, pass, up). Torso leans 10°. Gun bobs 1u. | 0.32s loop |
+| Jump (ascent) | Legs tuck up, arms raise. Squash 0.9× width, 1.1× height. | Single pose until apex |
+| Jump (descent) | Legs extend down, arms out. Stretch 1.1× width, 0.9× height. | Single pose until land |
+| Land | 3-frame squash: 1.2× wide → 1.0 → 0.95. Dust puff particles (2 grey circles, 10u, fade 0.3s). | 0.2s |
+| Crouch | Torso compresses to 60%. Head drops. Gun aims downward 15°. | Instant pose, hold |
+| Fire (all guns) | Arm recoils back 4u, muzzle flash drawn. 2-frame: fire → recover. | 0.1–0.15s |
+| Hurt | Body flashes white 3× at 0.05s intervals. Knockback pose: lean back 15°. | 0.3s |
+| Death | Fall backward, spin 180°, dissolve into 8 amber/cyan particles. | 1.0s |
+
+## Rivet Drone
+
+**Silhouette:** Small floating hexagon with a single spinning rotor. Reads as "annoying pest."
+
+**Facings:** 2 (left, right).
+
+| Name | Rule | Duration |
+|---|---|---|
+| Hover | Y bob ±6u sine. Rotor: 360°/s. Slight tilt toward player. | 1.2s loop |
+| Fire | Tilt forward 10°, eye flash #FFD700, bullet spawn. | 0.15s |
+| Hurt | Flash white, drop 10u, wobble. | 0.2s |
+| Death | Spin + shrink to 0 over 0.3s, then explode (small). | 0.3s |
+
+## Smelter Bot (W1)
+
+**Silhouette:** Wide, low, furnace-bellied. Reads as "tank."
+
+**Facings:** 2.
+
+| Name | Rule | Duration |
+|---|---|---|
+| Idle | Chest glow pulse #FF4500→#FF8C00. Slight sway. | 1.5s |
+| Walk | 2-frame leg stomp. Ground shake 1px. | 0.5s loop |
+| Fire | Arm extends, chest flares white, flame projectile. | 0.3s |
+| Hurt | Flash, stagger back 6u. | 0.25s |
+| Death | Collapse inward, furnace extinguishes (glow → dark), smoke puff. | 0.6s |
+
+## Cryo Stalker (W2)
+
+**Silhouette:** Tall, thin, insectoid. Reads as "fast threat."
+
+**Facings:** 2.
+
+| Name | Rule | Duration |
+|---|---|---|
+| Idle | 4 legs alternate micro-shift. Head tilt ±8°. Crystal glints. | 1.0s |
+| Dash | Stretch 1.3× horizontal, legs blur (3 afterimages). | 0.2s |
+| Fire | Head snaps forward, ice shard projectile. | 0.2s |
+| Hurt | Flash #A8E6FF, recoil. | 0.2s |
+| Death | Shatter into 6 crystal triangles, scatter and fade. | 0.4s |
+
+## Boss – Furnace Colossus
+
+**Silhouette:** Massive, wide, smoky. Reads as "unavoidable obstacle."
+
+| Name | Rule | Duration |
+|---|---|---|
+| Idle | Core pulse, smokestack puffs (3 grey circles/s), slight sway. | 2s loop |
+| Arm sweep | Right arm arcs 120° forward, ground cracks (4 lines). | 0.8s |
+| Slag vomit | Head tilts back, orange stream projectile. | 1.0s |
+| Hurt | Core flashes white, 3 sparks fly, stagger 4px. | 0.3s |
+| Death | Core overcharges (white → red), 5 explosions over 2s, collapse, screen flash. | 2.5s |
+
+## Boss – Absolute Zero
+
+**Silhouette:** Tall, angular, crystalline. Reads as "elegant, deadly."
+
+| Name | Rule | Duration |
+|---|---|---|
+| Idle | Float ±8u. 4 shards orbit at 120°/s, radius 60u. Eyes glow #00F5FF. | 3s loop |
+| Shard throw | 1 shard detaches, fires toward player. | 0.3s |
+| Ice storm | Spins 360°, 4 shards fire in cross pattern, screen frost overlay. | 1.2s |
+| Hurt | Flash #A8E6FF, shards wobble, frost particles. | 0.3s |
+| Death | Shards shatter outward, body freezes solid then cracks into 12 pieces. | 2s |
+
+---
+
+# 6. FEEDBACK
+
+| Event | Visual | Duration |
+|---|---|---|
+| Player bullet hits enemy | Small white flash circle (12u) at impact + 3 spark lines outward + enemy flashes white | 0.12s |
+| Player bullet misses (hits wall) | Small coloured puff (weapon colour, 8u) + 2 dust particles | 0.15s |
+| Player takes damage | Screen flash red 40% + 4px shake + chromatic aberration 2px + player white-flash 3× + health bar segments turn grey left-to-right | 0.3s |
+| Player at low health (<30%) | Health bar pulses red. Vignette tightens to 50% edges. Heartbeat vignette pulse (scale 1.0→1.02, 0.8s loop). | Continuous while low |
+| Player pickup (coin) | Coin spins, pops upward 20u, "+1" text rises and fades. Small gold sparkle (3 dots). | 0.4s |
+| Player pickup (health) | Green cross expands from pickup, screen-edge green glow 0.2s. Health bar fills with bright pulse. | 0.3s |
+| Player pickup (ammo) | Ammo crate vanishes, weapon icon flashes in HUD, small "+∞" text. | 0.3s |
+| Player pickup (new weapon) | Screen flash weapon-colour 50%, weapon name text slides in bottom-center, gun model appears in player hand. | 1.0s |
+| Enemy death (small) | Explosion circle + 6 sparks + 2–3 coin drops (16u circles, arc up 30u, land) | 0.4s |
+| Enemy death (large/boss) | Multi-stage explosion + screen shake 10px + white flash + slow-mo tint + coins shower (8–12) | 2.0s |
+| Crate destroyed | Break into 4 wooden fragments (rectangles, spin outward, gravity, fade 0.5s) + dust puff | 0.5s |
+| Door opening | Two halves slide apart with gear-rotation, light spills from behind (warm/cold gradient), steam/coolant puff from edges | 0.6s |
+| Stage complete | "STAGE CLEAR" text stamps in (scale 2→1, 0.3s), gold particles rain from top, score tallies up | 2.0s |
+| World complete | Full-screen transition: forge/ice motif wipes horizontally, world map fades in | 1.5s |
+| Game over | Desaturate to 20% over 0.5s, vignette closes to 80%, "SYSTEM FAILURE" text in #FF4500, slow red pulse | 1.0s |
+| Timer warning (if stage has one) | HUD timer text pulses #FF4500, screen-edge red vignette pulses 1s | Continuous < 10s |
+| Crouch under obstacle | Brief "squeak" visual: player compresses, 2 small lines at head indicating "ducking" | 0.1s |
+| Landing on enemy (stomp) | Enemy squishes flat (scale Y 0.3) → bounces up → explodes. Player bounces off with 2-frame squash. | 0.3s |
+| Rail Driver charge | Rail line on gun brightens #00F5FF→#FFFFFF, player arms extend forward, screen vignette darkens 10% | 0.3s (charge) |
+| Acid spray hit (enemy) | Enemy covered in 3–5 green dripping circles, small "sizzle" particles (tiny grey puffs) for 1s | 1.0s |
+
+---
+
+# 7. SCREENSHOT CHECKLIST
+
+| Screen / State | How to Reach | What a Person Must See |
+|---|---|---|
+| Title screen | Launch game | Game logo "FORGE BREAKER" in amber/cyan gradient, animated gear + crystal background, "PRESS START" pulsing, 2D parallax factory visible |
+| World map / Stage select | After title or between stages | 2 rows of 5 circles. World 1 circles amber, World 2 cyan. Completed = filled + checkmark. Next = pulsing glow. Locked = grey. Stage numbers visible. |
+| Stage 1-1 start (loading in) | Select stage 1-1 | Camera pans from left edge to player at X=120. Zone 1: loading dock, crates, forklift silhouette, warm amber floor glow. Player idle-bobbing. HUD visible top-left. |
+| Mid-run: running + shooting | Play stage 1-2, zone 2 | Player mid-run (4-frame leg visible), gun aimed right, muzzle flash amber (scatter cannon), conveyor belt scrolling below, rivet drone ahead, 2 platforms above, parallax gears rotating in mid-layer. |
+| Crouch under obstacle | Stage 1-3, pipe section | Player squished to 60% height under horizontal pipe, gun angled down, visor glow visible, amber accent lighting on floor. |
+| Jump over hazard | Stage 1-2, slag pit | Player airborne (legs tucked), slag pit below with orange glow + heat shimmer, platform ahead visible, bullet trail behind player. |
+| New weapon pickup | Stage 1-3, zone 4 | Spinning Rail Driver icon above crate, player reaching, screen flash cyan, weapon name "RAIL DRIVER" sliding in at bottom. |
+| Rail Driver firing | After pickup, any stage | 200u cyan beam stretching across screen, player arms extended, charge glow on gun, enemy at far end being hit, sparks at impact. |
+| Acid Sprayer in use | Stage 2-2 | Green droplet arc (5–8 circles) spraying toward Cryo Stalker, nozzle glowing #7FFF00, sizzle particles on enemy. |
+| Enemy death (drone) | Kill a rivet drone | Hexagon spinning + shrinking, explosion circle amber, 6 spark lines, 2 coin drops arcing up, small "+50" text. |
+| Boss fight (Furnace Colossus) | Stage 1-5 | Massive 160×200 boss center-right, orange core pulsing, smokestack puffing, player small in foreground firing, ground cracked from arm sweep, HUD showing boss health bar (top center). |
+| Boss death | Defeat Furnace Colossus | Multi-explosion white/orange, screen shake 10px, white flash, slow-mo desaturation, 12 coins raining, "STAGE CLEAR" stamping in. |
+| Stage complete | Any stage end | "STAGE CLEAR" large text, gold particle rain, score tally, warm glow from opened blast door, player at exit. |
+| Game over | Lose all lives | Desaturated scene, heavy red vignette, "SYSTEM FAILURE" in #FF4500, player dissolve particles mid-air, HUD greyed out. |
+| World 2 contrast | Start stage 2-1 | Everything shifted cool: cyan floor glow, frost on tiles, blue-white light pools, Cryo Stalker visible, condensation pipes, Absolute Zero boss silhouette in far background parallax. |
+| Low health state | Take damage until <30% | Health bar pulsing red, vignette tightened + heartbeat pulse, player white-flashing from last hit, screen edges red-tinted. |
+| Pause overlay | Press pause mid-stage | Semi-transparent dark overlay, "PAUSED" text center, resume/quit buttons, game frozen behind (no motion), vignette slightly heavier. |
+| Stage 2-5 (Absolute Zero boss) | Reach final stage | Tall crystalline boss, 4 orbiting ice shards (cyan glow), frost overlay on screen edges, player crouched firing scatter cannon, shards mid-flight as projectiles, cold-blue ambient. |
+
+---
+</visual.md>
+
+<engineering.md>
+# engineering.md
+
+**Rendering decision: 2D, HTML5 Canvas 2D context.** A side-scrolling platformer does not benefit from 3D; the tile grid, AABB collision, and sprite compositing all map directly to `CanvasRenderingContext2D`.
+
+---
+
+# 1. CONVENTIONS
+
+## Coordinate system
+
+| Item | Rule |
+|---|---|
+| **Unit** | 1 unit = 1 logical pixel. The canvas backing store is `canvas.width × canvas.height` physical pixels; the logical viewport is always **960 × 540** units. A CSS transform scales the canvas to the browser window; all game math stays in logical pixels. |
+| **Axes** | X increases **rightward**. Y increases **downward** (canvas-native). "Up" in gameplay text means **−Y**. Gravity is a positive Y acceleration. |
+| **Origin** | Top-left of the logical viewport, `(0, 0)`. The level's world origin is also `(0, 0)`; the camera offset translates world coordinates into viewport coordinates. |
+| **Tile grid** | The level is a grid of **32 × 32**-unit tiles. Tile coordinate `(tx, ty)` maps to world position `(tx*32, ty*32)`. |
+| **Ground rule** | The lowest solid tile row of a stage is the floor. A player standing on it has their feet at `y = floorTileRow*32`. There is no infinite ground; falling below `y > stageHeight*32 + 64` triggers death. |
+
+## Update loop
+
+```
+const DT = 1/60;          // fixed timestep, seconds
+```
+
+Each animation frame:
+
+1. Accumulate real elapsed time.
+2. While accumulator ≥ DT: run **one tick** (see system order below), decrement accumulator.
+3. After all ticks for the frame: **render once**.
+
+If accumulator exceeds 5 DTs (tab was backgrounded), clamp to 5 DTs to avoid spiral-of-death.
+
+### Tick system order (strict)
+
+| Order | System | Why this position |
+|---|---|---|
+| 1 | `input.update()` | Latch new key states, build the frame's input snapshot. |
+| 2 | `progression.update()` | Check stage transitions / death → reload level before physics. |
+| 3 | `level.update()` | Animate tiles, move platforms, tick hazards. |
+| 4 | `player.update()` | Apply input → velocity → position → collision. |
+| 5 | `weapons.update()` | Fire held guns, advance bullet pools. |
+| 6 | `enemies.update()` | AI, movement, collision with bullets and player. |
+| 7 | `camera.update()` | Follow player, clamp to stage bounds. |
+| 8 | `audio.update()` | Flush queued sound events. |
+| 9 | `renderer.draw()` | **After all ticks**, outside the while-loop. |
+
+## Random source
+
+One seeded PRNG, named **`rng`**, implemented as a 32-bit xorshift. Every module that needs randomness calls `rng.next()` (returns float in [0,1)) or `rng.nextInt(n)` (returns int in [0,n)). **No call to `Math.random()` exists anywhere in the codebase.** The PRNG is reseeded only via `seed(n)` in the debug API or at the start of a stage.
+
+## Controls
+
+| Input | Action | Binding |
+|---|---|---|
+| A / ← | Move left | `KeyA`, `ArrowLeft` |
+| D / → | Move right | `KeyD`, `ArrowRight` |
+| W / ↑ / Space | Jump | `KeyW`, `ArrowUp`, `Space` |
+| S / ↓ | Crouch (hold) | `KeyS`, `ArrowDown` |
+| J / Enter / Z | Shoot (hold) | `KeyJ`, `Enter`, `KeyZ` |
+| K / Shift | Switch gun (cycle) | `KeyK`, `ShiftLeft` |
+| Touch: left half of screen | Move left / right (relative to touch x vs. player screen x) | Pointer events |
+| Touch: bottom-left virtual dpad | Move + crouch | Pointer events |
+| Touch: bottom-right virtual buttons | Jump, Shoot, Switch | Pointer events |
+
+Keyboard state is read from a `keydown`/`keyup` map; the debug API can inject synthetic key events.
+
+---
+
+# 2. MODULES
+
+## Module table
+
+| Module | Responsibility |
+|---|---|
+| `game` | State machine: TITLE → PLAYING → PAUSED → STAGE_CLEAR → GAME_OVER. Owns the main loop and the single `ctx` (global context). |
+| `input` | Reads keyboard / pointer events, maintains key-state snapshot, exposes `isDown(action)`. |
+| `progression` | World/stage index, lives, score, checkpoint, stage-clear logic, death → respawn or game-over. |
+| `level` | Tilemap data, solid/hazard/platform tiles, parallax layers, stage geometry, `stageWidth`, `stageHeight`. |
+| `player` | Player entity: position, velocity, state (idle/run/jump/crouch/hurt), health, animation frame. |
+| `weapons` | 4 gun types, ammo, fire-rate timers, bullet pool, bullet physics & collision. |
+| `enemies` | Enemy pool, per-type AI, damage, death, drop generation. |
+| `camera` | Viewport offset, follow logic, screen-shake accumulator. |
+| `audio` | Web Audio graph, generated SFX (oscillator + noise buffers), music loop scheduling. |
+| `renderer` | Canvas 2D draw calls: clear, parallax bg, tiles, entities, HUD, transitions. |
+| `ui` | HUD elements (health bar, ammo, gun icon, score, world/stage label), title screen text layout, pause overlay. |
+
+## Global context
+
+Every module reads and writes **only** through this object. No module imports another.
+
+```js
+const ctx = {{
+  // --- timing ---
+  time: 0,                    // float, seconds elapsed in current stage
+  frame: 0,                   // int, total ticks since seed
+  dt: 1/60,                   // float, fixed step
+
+  // --- rng ---
+  rng: null,                  // {{ next(), nextInt(n), seed(n) }}
+
+  // --- game state ---
+  state: 'TITLE',             // 'TITLE'|'PLAYING'|'PAUSED'|'STAGE_CLEAR'|'GAME_OVER'
+  paused: false,              // bool
+
+  // --- progression ---
+  world: 1,                   // int 1..2
+  stage: 1,                   // int 1..5
+  lives: <start lives>,       // int
+  score: 0,                   // int
+  stageClearTimer: 0,         // float, counts down after flag reached
+
+  // --- level ---
+  level: {{
+    tiles: null,              // Uint8Array, width*height, tile-type enum
+    tileW: 32,                // int
+    tileH: 32,                // int
+    width: 0,                 // int, tiles across
+    height: 0,                // int, tiles down
+    stageWidth: 0,            // float, world px
+    stageHeight: 0,           // float, world px
+    spawnX: 0,                // float
+    spawnY: 0,                // float
+    flagX: 0,                 // float, stage-end trigger
+    platforms: [],            // [{{x,y,w,h,vx,vy}}], moving platforms
+    hazards: [],              // [{{x,y,w,h}}]
+    parallax: [],             // [{{layer,src}}]
+  }},
+
+  // --- player ---
+  player: {{
+    x: 0,                     // float, world px
+    y: 0,                     // float, world px
+    vx: 0,                    // float, px/s
+    vy: 0,                    // float, px/s
+    w: <player width>,        // int, px (standing)
+    h: <player height>,       // int, px (standing)
+    crouchH: <crouch height>, // int, px
+    facing: 1,                // int, +1 right / -1 left
+    grounded: false,          // bool
+    crouching: false,         // bool
+    jumping: false,           // bool
+    health: <player max hp>,  // int
+    maxHealth: <player max hp>,// int
+    invulnTimer: 0,           // float, seconds of invulnerability after hit
+    anim: 'idle',             // 'idle'|'run'|'jump'|'fall'|'crouch'|'hurt'
+    animFrame: 0,             // int
+    animTimer: 0,             // float
+    gunIndex: 0,              // int 0..3
+    alive: true,              // bool
+  }},
+
+  // --- weapons ---
+  weapons: {{
+    guns: [                   // 4 entries, filled at level load
+      {{ name:'pistol',  dmg:<pistol dmg>,  rate:<pistol rate>,  ammo:<pistol ammo>, maxAmmo:<pistol max>, bulletSpeed:<pistol speed>, spread:0,    pellets:1 }},
+      {{ name:'shotgun', dmg:<shotgun dmg>, rate:<shotgun rate>, ammo:<shotgun ammo>, maxAmmo:<shotgun max>, bulletSpeed:<shotgun speed>, spread:<shotgun spread>, pellets:<shotgun pellets> }},
+      {{ name:'laser',   dmg:<laser dmg>,   rate:<laser rate>,   ammo:<laser ammo>,   maxAmmo:<laser max>,   bulletSpeed:<laser speed>,   spread:0,    pellets:1, piercing:true }},
+      {{ name:'rocket',  dmg:<rocket dmg>,  rate:<rocket rate>,  ammo:<rocket ammo>,  maxAmmo:<rocket max>,  bulletSpeed:<rocket speed>,  spread:0,    pellets:1, aoeRadius:<rocket aoe> }},
+    ],
+    fireTimer: 0,             // float, seconds until next shot allowed
+    bullets: [],              // pool, see §3
+  }},
+
+  // --- enemies ---
+  enemies: {{
+    pool: [],                 // see §3 caps
+    spawnQueue: [],           // [{{x,y,type,timer}}] generated at level load
+  }},
+
+  // --- camera ---
+  camera: {{
+    x: 0,                     // float, world px of viewport left edge
+    y: 0,                     // float, world px of viewport top edge
+    shakeX: 0, shakeY: 0,    // float, screen-shake offset
+    shakeTimer: 0,           // float
+  }},
+
+  // --- input snapshot (rebuilt each tick) ---
+  input: {{
+    left: false, right: false, jump: false, crouch: false,
+    shoot: false, switchGun: false,
+    switchGunPressed: false,  // edge-triggered
+    jumpPressed: false,       // edge-triggered
+  }},
+
+  // --- audio ---
+  audio: {{
+    ctx: null,                // AudioContext or null
+    masterGain: null,         // GainNode
+    sfxQueue: [],             // [{{type, x, y, time}}]
+    musicPlaying: false,      // bool
+    musicNodes: [],           // active oscillators/nodes
+  }},
+
+  // --- render ---
+  canvas: null,               // HTMLCanvasElement
+  c2d: null,                  // CanvasRenderingContext2D
+}};
+```
+
+## Module exports
+
+### `game`
+```
+init(canvasEl, opts) → void
+  // Wires canvas, builds ctx, installs window.__game, starts rAF loop.
+start() → void
+  // TITLE → PLAYING. Loads world 1 stage 1.
+tick() → void
+  // Runs one DT tick through the system order.
+render() → void
+  // Calls renderer.draw().
+pause() / resume() → void
+```
+
+### `input`
+```
+attach(canvasEl) → void
+  // Binds keydown/keyup/pointerdown/pointerup on window/canvas.
+snapshot() → void
+  // Writes into ctx.input from the raw key map.
+isDown(action: string) → bool
+inject(action: string, down: bool) → void
+  // Debug: set a synthetic key state.
+```
+
+### `progression`
+```
+loadStage(world: int, stage: int) → void
+  // Resets player, clears pools, calls level.generate(), spawns enemies.
+checkStageClear() → void
+  // If player.x >= level.flagX → state='STAGE_CLEAR'.
+checkDeath() → void
+  // If player.y > stageHeight+64 or health<=0 → lose life or game over.
+nextStage() → void
+advanceWorld() → void
+```
+
+### `level`
+```
+generate(world: int, stage: int) → void
+  // Fills ctx.level from tile data + rng for decorations.
+getTile(tx, ty) → int
+isSolid(tx, ty) → bool
+resolveAABB(entity) → {{grounded, hitX, hitY}}
+  // Moves entity, clamps to solid tiles, returns collision flags.
+update() → void
+  // Advances moving platforms and hazard timers.
+```
+
+### `player`
+```
+update() → void
+  // Reads ctx.input, applies acceleration/gravity, calls level.resolveAABB.
+hurt(amount: int) → void
+respawn() → void
+  // Reset to spawn point, invulnTimer = <invuln duration>.
+```
+
+### `weapons`
+```
+update() → void
+  // If input.shoot and fireTimer<=0 → fire(). Advance bullets.
+fire() → void
+  // Spawn bullet(s) from gun at player pos, decrement ammo, reset fireTimer.
+switchGun() → void
+  // gunIndex = (gunIndex+1)%4.
+```
+
+### `enemies`
+```
+update() → void
+  // Tick AI, move, check bullet collisions, check player contact.
+spawn(type: string, x: float, y: float) → int
+  // Returns enemy id or -1 if pool full.
+damage(id: int, amount: int) → bool
+  // Returns true if killed.
+```
+
+### `camera`
+```
+update() → void
+  // Lerp toward player, clamp to [0, stageWidth-960]. Decay shake.
+addShake(intensity: float, duration: float) → void
+```
+
+### `audio`
+```
+init() → void
+  // Create AudioContext (deferred to first user gesture).
+playSFX(type: string) → void
+stopMusic() / startMusic(track: string) → void
+update() → void
+  // Flush sfxQueue.
+```
+
+### `renderer`
+```
+draw() → void
+  // Full-frame: clear → parallax → tiles → entities → bullets → HUD → overlays.
+```
+
+### `ui`
+```
+drawHUD(c2d) → void
+drawTitle(c2d) → void
+drawPause(c2d) → void
+drawStageClear(c2d) → void
+```
+
+---
+
+# 3. BUDGETS
+
+All numbers below are **hard caps the test suite asserts**. Exceeding any one is a build failure.
+
+| Resource | Cap | Rationale |
+|---|---|---|
+| Frame time (tick + render) | **≤ 14 ms** (target 60 fps) | 960×540 canvas, no GPU compositing tricks. |
+| Canvas draw calls per frame | **≤ 200** `drawImage`/`fillRect`/`stroke` ops | Tiles visible ≈ 30×17 = 510, but only non-empty tiles drawn; cull to viewport. |
+| Tile draws per frame | **≤ 540** (viewport 30×17 tiles) | Cull off-screen columns/rows. |
+| Player entity count | **1** | Single protagonist. |
+| Enemy pool size | **64** | Ring buffer; `spawn` returns -1 when full. |
+| Bullet pool size | **128** | Ring buffer; oldest recycled if full. |
+| Particle pool size | **256** | Hit sparks, explosions. |
+| Moving platforms per stage | **≤ 32** | |
+| Hazard tiles per stage | **≤ 64** | |
+| Total entities (enemies + bullets + particles) | **≤ 448** | Sum of three pools. |
+| Level tilemap size per stage | **≤ 400 × 40** tiles (12 800 × 1 280 px) | Uint8Array = 16 KB. |
+| JS heap (steady state, mid-stage) | **≤ 32 MB** | No per-frame allocations in hot loops; use pools. |
+| Audio nodes live | **≤ 16** | Oscillators + gain nodes; auto-disconnect on end. |
+| `ctx` object total keys | **≤ 120** | Flat enough for `getState()` to serialise in < 1 ms. |
+
+---
+
+# 4. DEBUG API
+
+`game.init()` installs `window.__game`. Every method is **synchronous**, returns **only plain data** (numbers, strings, booleans, arrays, nested plain objects). No Promises, no DOM nodes, no functions in return values.
+
+| Call | What it does | Returns |
+|---|---|---|
+| `start()` | Sets `state='PLAYING'`, calls `progression.loadStage(1,1)`. No click needed. | `undefined` |
+| `step(dt, n)` | Runs exactly `n` ticks of length `dt` seconds (updates all systems in order), then calls `renderer.draw()` once. Does **not** wait for rAF. | `undefined` |
+| `setTime(t)` | Advances simulation to absolute time `t` seconds (runs the required number of DT ticks) **without drawing**. | `undefined` |
+| `seed(n)` | Reseeds `rng` with integer `n`, then rebuilds all generated content (tilemap, enemy spawn queue, decorations). Resets `time` and `frame` to 0. | `undefined` |
+| `getState()` | Deep-clones every field of `ctx` into a plain object and returns it. | `{{ time, frame, state, world, stage, lives, score, player:{{...}}, weapons:{{...}}, enemies:{{...}}, camera:{{...}}, level:{{...}}, input:{{...}} }}` |
+| `setField(path, value)` | Sets `ctx` field at dot-path, e.g. `"player.health"`. | `undefined` |
+| `moveDir(dx)` | Sets persistent horizontal input: −1 left, 0 stop, +1 right. Persists until next call. | `undefined` |
+| `jump()` | Fires one jump press (sets `jumpPressed=true` for one tick). | `undefined` |
+| `crouch(down)` | `true` = hold crouch, `false` = release. | `undefined` |
+| `shoot(down)` | `true` = hold fire, `false` = release. | `undefined` |
+| `switchGun()` | One cycle press. | `undefined` |
+| `spawnEnemy(type, x, y)` | Calls `enemies.spawn(type,x,y)`. | `{{id, x, y, type, health}}` or `{{id:-1}}` if pool full |
+| `spawnBullet(gunIndex, x, y, dir)` | Directly inserts a bullet into the pool. | `{{id, x, y, vx, vy}}` |
+| `skipTo(world, stage)` | Calls `progression.loadStage(world, stage)`. | `undefined` |
+| `setHealth(v)` | Sets `player.health = v`. | `undefined` |
+| `setAmmo(gunIndex, v)` | Sets that gun's ammo. | `undefined` |
+| `setPos(x, y)` | Teleports player. | `undefined` |
+| `getFPS()` | Returns measured FPS over last 60 real frames (0 if stepped). | `number` |
+| `getDrawCalls()` | Returns draw-call count from last `renderer.draw()`. | `number` |
+
+**Determinism contract:** Given the same `seed(n)` and the same sequence of `step`/input calls, `getState()` returns a byte-identical JSON string. The PRNG is the sole source of nondeterminism and is fully controlled by `seed()`.
+
+---
+
+# 5. TESTS
+
+All checks run through `window.__game` only. Each check is a call sequence followed by an assertion on `getState()`.
+
+### Boot & state machine
+
+1. **Title draws.** `init()` called; `getState().state === 'TITLE'`. Canvas exists, `getDrawCalls() > 0` after one manual `step(1/60,1)`.
+
+2. **Start enters play.** `start()`. `getState().state === 'PLAYING'`, `world === 1`, `stage === 1`, `player.alive === true`, `player.health === <player max hp>`.
+
+### Movement & physics
+
+3. **Walk right.** `seed(42)`, `start()`, `moveDir(1)`, `step(1/60, 60)`. Assert `player.x > spawnX + <player speed> * 0.5` (moved right), `player.grounded === true`, `player.anim === 'run'`.
+
+4. **Walk left.** `moveDir(-1)`, `step(1/60, 30)`. Assert `player.x` decreased.
+
+5. **Stop.** `moveDir(0)`, `step(1/60, 60)`. Assert `Math.abs(player.vx) < 1` (friction applied).
+
+6. **Jump.** `moveDir(0)`, `jump()`, `step(1/60, 1)`. Assert `player.jumping === true`, `player.grounded === false`, `player.vy < 0` (upward). After `step(1/60, 40)`, assert `player.grounded === true` (landed).
+
+7. **Crouch.** `crouch(true)`, `step(1/60, 1)`. Assert `player.crouching === true`, `player.h === <crouch height>`. `crouch(false)`, `step(1/60, 1)`. Assert `player.crouching === false`, `player.h === <player height>`.
+
+8. **Gravity / fall.** `setPos(0, 0)` above any platform, `step(1/60, 30)`. Assert `player.y` increased (fell), `player.vy > 0`.
+
+### Weapons
+
+9. **Pistol fire.** `seed(42)`, `start()`, `switchGun()` × 0 (pistol is index 0). `shoot(true)`, `step(1/60, 1)`. Assert `weapons.bullets.length ≥ 1`, `weapons.guns[0].ammo === <pistol ammo> - 1`. `shoot(false)`.
+
+10. **Switch gun.** `switchGun()`, `step(1/60, 1)`. Assert `player.gunIndex === 1`. `switchGun()` × 3 more → `player.gunIndex === 0` (wraps).
+
+11. **Shotgun pellets.** `setField('player.gunIndex', 1)`, `shoot(true)`, `step(1/60, 1)`. Assert bullets spawned this shot = `<shotgun pellets>` (check `weapons.bullets` length delta). `shoot(false)`.
+
+12. **Laser piercing.** `setField('player.gunIndex', 2)`. `spawnEnemy('grunt', player.x + 100, player.y)`. `shoot(true)`, `step(1/60, 5)`. Assert the laser bullet's `id` is still alive (passed through enemy, enemy health reduced by `<laser dmg>`). `shoot(false)`.
+
+13. **Rocket AoE.** `setField('player.gunIndex', 3)`. Spawn 3 enemies within `<rocket aoe>` radius of target. Fire rocket, `step(1/60, 30)`. Assert all 3 enemies' health ≤ 0 (killed).
+
+### Enemies & combat
+
+14. **Enemy spawn.** `seed(7)`, `start()`. `spawnEnemy('grunt', 500, 300)`. Assert `enemies.pool` contains entry with `type==='grunt'`, `x===500`, `y===300`, `health === <grunt hp>`.
+
+15. **Player takes damage.** `setPos(<enemy contact x>, <enemy contact y>)`. `step(1/60, 1)`. Assert `player.health === <player max hp> - <grunt dmg>`, `player.invulnTimer > 0`.
+
+16. **Invulnerability.** Immediately `step(1/60, 1)` again. Assert `player.health` unchanged (still invulnerable).
+
+17. **Death & respawn.** `setHealth(0)`, `step(1/60, 1)`. Assert `player.alive === false`, `lives === <start lives> - 1`. After `step(1/60, <respawn delay>)`, assert `player.alive === true`, `player.health === <player max hp>`, `player.invulnTimer > 0`.
+
+### Level & progression
+
+18. **Tile collision.** Place player at `y` of a known solid tile row. `step(1/60, 1)`. Assert `player.grounded === true`, `player.y === <that tile row> * 32 - <player height>`.
+
+19. **Stage clear.** `setPos(level.flagX + 1, player.y)`, `step(1/60, 1)`. Assert `state === 'STAGE_CLEAR'`. After `step(1/60, <stage clear duration>)`, assert `stage === 2`, `state === 'PLAYING'`.
+
+20. **World progression.** `skipTo(1, 5)`, clear stage 5. Assert `world === 2`, `stage === 1`.
+
+21. **Game over.** `setHealth(1)`, take damage → `setHealth(0)`, `step(1/60, 1)`. Set `lives = 0` beforehand. Assert `state === 'GAME_OVER'`.
+
+### Camera
+
+22. **Follow & clamp.** `moveDir(1)`, `step(1/60, 120)`. Assert `camera.x > 0`, `camera.x <= level.stageWidth - 960`.
+
+### Audio
+
+23. **SFX queue.** `shoot(true)`, `step(1/60, 1)`. Assert `audio.sfxQueue.length > 0` (at least one 'pistol' event queued). `shoot(false)`.
+
+### Determinism
+
+24. **Reproducibility.**
+```
+seed(1234); start(); moveDir(1); jump(); shoot(true);
+step(1/60, 300);
+const a = JSON.stringify(getState());
+
+seed(1234); start(); moveDir(1); jump(); shoot(true);
+step(1/60, 300);
+const b = JSON.stringify(getState());
+```
+Assert `a === b` (byte-identical).
+
+### Budgets
+
+25. **Draw calls.** After `step(1/60, 1)`, assert `getDrawCalls() <= 200`.
+
+26. **Entity cap.** `spawnEnemy('grunt', 100, 100)` × 65. Assert 65th call returns `{{id: -1}}`. Assert `enemies.pool.length === 64`.
+
+27. **Bullet cap.** Fire pistol continuously for 200 ticks without bullets hitting anything. Assert `weapons.bullets.length <= 128`.
+
+---
+
+# 6. BUILD ORDER
+
+| # | Milestone | Modules added | Proof check (from §5) |
+|---|---|---|---|
+| **M1** | Page opens, draws title, `start()` enters play with a blank ground and a static player rectangle. | `game`, `input`, `renderer` (stub), `ui` (title text) | **Check 1, 2** |
+| **M2** | Player walks, jumps, crouches on a hand-authored tile row. Camera follows. | `player`, `level` (static tilemap), `camera` | **Checks 3–8, 18, 22** |
+| **M3** | Pistol fires bullets; one enemy type ('grunt') walks and damages player. Health, lives, death, respawn. | `weapons` (pistol), `enemies`, `progression` (lives/death) | **Checks 9, 14–17** |
+| **M4** | All 4 guns implemented (shotgun, laser, rocket). Ammo, fire-rate, switching, piercing, AoE. | `weapons` (full) | **Checks 10–13** |
+| **M5** | Stage generation from data: 2 worlds × 5 stages, tilemap fill, spawn points, flag, hazards, moving platforms. Stage-clear → next stage → next world. | `level` (generate), `progression` (full) | **Checks 19–21** |
+| **M6** | Enemy variety (≥ 4 types), enemy AI behaviours, drops (ammo, health). | `enemies` (full) | **Check 15, 26** |
+| **M7** | Audio: Web Audio SFX for each gun, jump, hit, explosion. Background music loop per world. | `audio` | **Check 23** |
+| **M8** | Full renderer: parallax layers, sprite sheets, tile culling, screen shake, particles, HUD (health bar, ammo counter, gun icon, world/stage label, score). | `renderer`, `ui` (full) | **Check 25** |
+| **M9** | Touch controls: virtual dpad + action buttons. Pause overlay. | `input` (pointer), `ui` (pause) | Manual; verified by `getState().input` after synthetic pointer events. |
+| **M10** | Polish: invulnerability blink, death animation, stage-clear fanfare, game-over screen, restart from title. Final budget & determinism pass. | all | **Checks 24, 25, 26, 27** |
+
+Every milestone from M2 onward leaves the game playable (player can move, shoot, die, respawn).
+
+---
+
+# 7. RISKS
+
+### Risk 1 – Y-axis sign inversion between physics and rendering
+**What:** Canvas Y grows downward, but "up" in gameplay (jump, gravity direction, tile placement) is intuitive as Y-decreasing. A mismatch between `player.vy < 0` meaning "jumping up" and a tilemap generator that places ground at high Y values will cause the player to fall through the floor or stick to the ceiling.
+
+**Prevention rule:** **Gravity is always a positive Y acceleration** (`vy += gravity * dt`, gravity > 0). The tilemap's solid tiles have **higher** Y values than the air above them. `level.resolveAABB` checks `entity.y + entity.h` against tile top. Every physics test (checks 6, 8, 18) asserts the sign explicitly. No module may negate Y before writing to `player.y`; the renderer is the sole place that may apply a visual flip (and for a 2D side-scroller it doesn't need to).
+
+### Risk 2 – Timing race between `step()` and the rAF loop during tests
+**What:** The debug API's `step()` advances the simulation synchronously, but the real `requestAnimationFrame` loop is still running. If a test calls `step(1/60, 300)` while rAF ticks are interleaved, the game advances more than 300 ticks and `setTime(t)` overshoots, breaking determinism.
+
+**Prevention rule:** `window.__game.step()` and `setTime()` **cancel the rAF handle** on entry and **do not restart it** until the test calls a hypothetical `game.resume()` (or the page is reloaded). The main loop sets a flag `__game._stepping = true` during `step()`/`setTime()`; the rAF callback checks this flag and returns immediately without ticking if it is set. Tests that need real-time FPS use `getFPS()` only after calling `game.resume()`.
+
+### Risk 3 – Tile-culling off-by-one causes flicker or missed collision at screen edges
+**What:** The renderer culls tiles to the viewport (≈ 30 × 17 tiles). A one-pixel rounding error in `Math.floor(camera.x / 32)` vs. `Math.ceil((camera.x + 960) / 32)` can skip the leftmost or rightmost tile column, so a player standing on a platform whose left edge is one pixel off-screen has no collision check and falls through.
+
+**Prevention rule:** The culling window is **padded by 1 tile in every direction**: `txMin = Math.floor(camera.x / 32) - 1`, `txMax = Math.ceil((camera.x + 960) / 32) + 1`, same for Y. Collision (`resolveAABB`) queries the tilemap in **world coordinates**, not viewport coordinates, so it is immune to camera position. Test 18 places the player at the exact left and right edges of the viewport and asserts `grounded === true`.
+</engineering.md>

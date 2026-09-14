@@ -1,0 +1,1 @@
+One file per section, in order: 00-scope.md, 01-conventions.md, 02-contracts.md, 03-visual.md, 04-gameplay.md, 05-characters.md, 06-audio.md, 07-ux.md, 08-debug-api.md, 09-tests.md, 10-build-order.md, 11-definition-of-done.md, A-sanity.md

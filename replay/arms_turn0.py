@@ -12,11 +12,17 @@ Two things are held constant so the comparison means something: the position (ev
 SAME build's turn 0) and the sampling (k per arm, temp 0.7).
 """
 
+
 from __future__ import annotations
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import Dict, List
 
-import probe
+from lib.replay import probe
 
 FIRST_CALL_SOON = (
     "\n\nWrite your first program now. Create index.html and one JavaScript file with the game "

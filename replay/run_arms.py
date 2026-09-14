@@ -1,6 +1,10 @@
-import sys, time, importlib
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import time, importlib
 from pathlib import Path
-import probe
+from lib.replay import probe
 
 mod = importlib.import_module(sys.argv[1])
 src = Path(sys.argv[2]); k = int(sys.argv[3]); positions = [int(x) for x in sys.argv[4:]]

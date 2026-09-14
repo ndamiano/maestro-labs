@@ -1,8 +1,10 @@
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pathlib import Path
 
-import branch
-import direct
+from lib.replay import branch, direct
 
 direct.install()
 
@@ -13,11 +15,11 @@ arm = sys.argv[4] if len(sys.argv) > 4 else "dsh"
 build = sys.argv[5] if len(sys.argv) > 5 else None
 reasoning = sys.argv[6] if len(sys.argv) > 6 else "medium"
 
-install = None
+install = restore = None
 if arm.startswith("dsh"):
     import arms_dsh
-    install = arms_dsh.install
+    install, restore = arms_dsh.install, arms_dsh.restore
 
-out = branch.run(src, position, turns, install=install, arm=arm, build=build,
+out = branch.run(src, position, turns, install=install, restore=restore, arm=arm, build=build,
                  reasoning=reasoning)
 print(out.report(), flush=True)

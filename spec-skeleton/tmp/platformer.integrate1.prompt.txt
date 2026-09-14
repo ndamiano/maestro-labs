@@ -1,0 +1,1242 @@
+You are the INTEGRATOR on a design team for a browser game an agentic AI will build. Three colleagues each wrote one design of the same request — gameplay.md, visual.md, engineering.md — in parallel, without seeing each other's work. Merge them into ONE build spec that supersedes all three: every number, name and rule in your document wins, and the builder reads only yours. Where the three agree, carry the content over whole; where they disagree, rule, and write the ruling down. Where one of them left a placeholder in angle brackets, fill it from the document that owns that number. Nothing in the three documents is dropped silently: it is carried, ruled on, or listed under a tier.
+
+The spec has these sections, in this order, with these headings:
+
+# 0. SCOPE
+## 0.1 Asked
+A table with requirements that come directly from the user's request, with where each lives in this document.
+| Requirement | Where it lives |
+| --- | --- |
+If the list is sparse after the user's requests, add the requirements that will elevate the game, marked as added.
+
+## 0.2 Decisions
+A table: topic → what gameplay said → what visual said → what engineering said → the ruling and one clause why. One row per disagreement, and one row per choice the request left open that a builder would otherwise have to make. Rulings are final.
+
+## 0.3 Tiers
+T1 is the game that must ship, by system name. Tiers beyond that stage the rest, each item one line and independent of the others, in the order to add them. Every system in section 4 is tagged with its tier where it is specified.
+
+# 1. CONVENTIONS
+## 1.1 Units, axes, frames
+## 1.2 Important conventions
+From engineering.md, ruled against the other two where they conflict: units, axes, origin, camera, the fixed-step loop and the order systems run, the one random source, the controls table.
+
+# 2. CONTRACTS
+## 2.1 Module layout
+## 2.2 Global context
+## 2.3 Module specifics
+From engineering.md, with every field the gameplay records need present in the global context and every function a rule or a test needs present in a module.
+
+# 3. VISUAL SPEC
+The look in one paragraph, then lighting and atmosphere, then the space, then the recipe table, from visual.md; ruled against gameplay where a visual implies a rule.
+
+# 4. GAMEPLAY SPEC
+The game in one paragraph, then the records with their rosters, then one subsection per system made of its rules with the numbers, tagged with its tier; then progression and difficulty; then feel. From gameplay.md, with every number gameplay gave carried as given.
+
+# 5. CHARACTERS
+Silhouettes, animations by name with their motion rules, facings; from visual.md, with the states gameplay's rules need.
+
+# 6. AUDIO
+Generated with the Web Audio API: a table of sound name → recipe (waveform, frequency, duration, envelope) → the rule that plays it. One row per event gameplay's rules and visual's feedback name.
+
+# 7. UX
+HTML and CSS only; the screens as a state machine and the HUD as a table of element → record field → when visible, merged from gameplay's screens and visual's feedback.
+
+# 8. DEBUG API
+From engineering.md, extended with one function per gameplay system that reaches its state directly, and the player's inputs as functions.
+
+# 9. TESTS
+From engineering.md, rewritten against the merged numbers so every check's expected state follows from section 4's rules; every system has at least one check; every call is in section 8. Then the SCREENSHOTS table from visual.md.
+
+# 10. BUILD ORDER
+Milestones from engineering.md, each naming the section-9 check that shows it landed.
+
+# 11. DEFINITION OF DONE
+Header rows, one per line of 0.1, with the checks and screenshot rows under each that make it true. When every header is complete the game is complete.
+
+# A. SANITY
+Re-read sections 2, 4, 8 and 9 and check them here, as a list of the checks made and their result, and FIX the sections above rather than record a failure: every field a rule reads or writes is in the global context; every place, thing or kind a rule names is placed by a generator or listed in a roster; for every consumable, the total placed against the total the rules can demand along the core loop; every timing pair (spawn against clear, drain against refill, travel time against distance at the given speed, the end-condition clock against the expected clear time) closes AND still bites — a clock the player can never hit is changed; every call section 9 makes is in section 8; no placeholder in angle brackets remains. Write "closes" or what was changed.
+
+Carry tables as tables and numbers as numbers. Do not summarize where a colleague wrote the detail; the builder gets the detail only from you.
+
+<request>
+{request}
+</request>
+
+<gameplay.md>
+# GAMEPLAY DESIGN — "GRIDFALL"
+
+**2D side-scrolling platformer. Camera: horizontal follow with 120 px look-ahead in the facing direction; vertical follow activates when the player's Y leaves a ±80 px dead-zone around camera center; camera clamps to level bounds.**
+
+---
+
+# 1. THE GAME IN ONE PARAGRAPH
+
+You are Kael, a freelance data-runner breaking into the seven floors of the Helix Spire, a mega-corporation's black-site server tower. Minute to minute you run, jump, crouch through low ducts, and shoot waves of security drones, sentries, and floor bosses with one of four weapons, managing a small ammo pool and a regenerating shield. Each world is a floor of the Spire; each stage is a sector you must clear left-to-right, reach the extraction pad at the far right, and survive. Stage 5 of every world is a boss arena. The game ends after you defeat the boss of World 2 (Sector 5 of Floor 2) and trigger the "Spire Purge" epilogue screen. Replayability comes from seeded level layouts that reshuffle platform and enemy placement between runs, a hidden score per stage (time, enemies killed, pickups collected), and a New Game+ mode where enemy HP and spawn density scale 1.4×. There is no endless mode; the game is 10 stages long, roughly 20–25 minutes for a skilled run.
+
+---
+
+# 2. RECORDS
+
+RECORDS: Player, Weapon, AmmoPool, Enemy, Boss, Pickup, Platform, Hazard, LevelSeed, StageProgress, ScoreBoard
+
+**Player** — Kael, the controllable character.
+| Field | Unit | Start / Range |
+|---|---|---|
+| x, y | px | spawn point per stage (e.g. 80, 400) |
+| vx, vy | px/s | 0, 0 |
+| facing | −1 or +1 | +1 (right) |
+| state | enum | "grounded" / "airborne" / "crouching" / "hurt" / "dead" |
+| hp | points | 100 / max 100 |
+| shield | points | 50 / max 50 |
+| shieldRegenDelay | s | 0 (counts up after last hit; regen starts at 2.0) |
+| crouchHeight | px | 28 (vs normal 48) |
+| jumpCount | int | 0 (max 2 for double-jump) |
+| invulnTimer | s | 0 (1.2 after being hit) |
+| activeWeapon | Weapon.id | "pulse_rifle" |
+
+**Weapon** — one of four entries (see roster table below).
+| Field | Unit | Notes |
+|---|---|---|
+| id | string | see roster |
+| damage | points/shot | see roster |
+| fireRate | shots/s | see roster |
+| spread | degrees (cone half-angle) | see roster |
+| projectileSpeed | px/s | see roster |
+| projectileLife | s | see roster |
+| pelletsPerShot | int | see roster |
+| pierceCount | int | see roster |
+| chainRadius | px | see roster (Arc Burst only) |
+| cooldownAfterFire | s | see roster |
+
+**Weapon Roster:**
+| id | damage | fireRate | spread | projSpeed | projLife | pellets | pierce | chainRadius | cooldown |
+|---|---|---|---|---|---|---|---|---|---|
+| pulse_rifle | 12 | 7.0 | 3° | 700 | 1.1 | 1 | 0 | 0 | 0 |
+| scatter_cannon | 9 | 1.5 | 18° | 520 | 0.45 | 6 | 0 | 0 | 0.65 |
+| rail_lance | 55 | 0.8 | 0° | 1400 | 2.0 | 1 | 3 | 0 | 1.1 |
+| arc_burst | 14 | 4.0 | 8° | 480 | 0.8 | 1 | 0 | 90 | 0 |
+
+**AmmoPool** — per-weapon remaining shots.
+| Field | Unit | Start / Max |
+|---|---|---|
+| pulse_rifle | shots | 120 / 240 |
+| scatter_cannon | shells | 24 / 48 |
+| rail_lance | charges | 10 / 20 |
+| arc_burst | cells | 40 / 80 |
+
+**Enemy** — a spawned hostile.
+| Field | Unit | Range |
+|---|---|---|
+| type | enum | see Enemy Roster |
+| x, y | px | per spawn |
+| hp | points | see roster |
+| vx, vy | px/s | see roster |
+| damage | points/contact | see roster |
+| state | enum | "patrol" / "chase" / "attack" / "hurt" / "dead" |
+| patrolDir | −1 or +1 | ±1 |
+| patrolRange | px | 80–200 |
+| aggroRange | px | see roster |
+| attackCooldown | s | see roster |
+| hitFlashTimer | s | 0 → 0.15 |
+
+**Enemy Roster:**
+| type | hp | vx | damage | aggroRange | attackCooldown | behavior |
+|---|---|---|---|---|---|---|
+| drone | 24 | 100 (floats, sine bob ±12 px) | 10 | 250 | 1.2 s (fires 1 slow bullet) | hovers toward player, stops at aggroRange |
+| sentry | 40 | 0 (stationary turret) | 15 (bullet) | 320 | 1.0 s (fires aimed bullet, speed 300 px/s) | rotates to face player, fires |
+| runner | 30 | 160 (ground, charges) | 18 (contact) | 200 | 0.4 s (melee lunge) | patrols, sprints at player |
+| mine | 20 | 0 (static) | 35 (AoE radius 70 px) | 60 (proximity) | 0.6 s fuse | detonates on proximity |
+| shieldbot | 70 | 60 (shuffles) | 20 (contact) | 180 | 2.0 s (melee slam) | carries front shield (blocks frontal damage), must be hit from behind/above |
+
+**Boss** — one per world, occupies stage 5.
+| Field | Unit | Range |
+|---|---|---|
+| id | string | "floor1_guardian" / "floor2_overseer" |
+| hp | points | 600 / 1100 |
+| phases | int | 3 |
+| attackList | array | see Boss Attacks table |
+| currentPhase | int | 1 |
+| phaseTransitionHP | points | 400 / 366 (floor2) |
+
+**Boss Attacks (Floor 1 Guardian "Custodian"):**
+| # | Trigger | Effect |
+|---|---|---|
+| 1 | Every 3.0 s | Slams ground, spawns 2 shockwave projectiles (speed 200, damage 20, travel along ground) |
+| 2 | Every 5.0 s | Fires 5 aimed bullets in a fan (±25°, speed 280, damage 15) |
+| 3 | Phase 2+ | Charges horizontally across arena (speed 300, damage 30, 1.5 s duration, 4 s cooldown) |
+| 4 | Phase 3 | Adds drone summons (2 drones, 200 px apart) every 6 s |
+
+**Boss Attacks (Floor 2 Overseer "Architect"):**
+| # | Trigger | Effect |
+|---|---|---|
+| 1 | Every 2.5 s | Sweeps a laser line across arena (travel 400 px/s, damage 25, 0.8 s duration) |
+| 2 | Every 4.0 s | Drops 3 ceiling mines (fall speed 180, proximity detonate 50 px, damage 35) |
+| 3 | Phase 2+ | Teleports to random x in arena, fires 8-bullet ring (speed 220, damage 12) |
+| 4 | Phase 3 | Deploys 2 shieldbots, then performs a 3× ground-slam sequence (damage 30 each, 0.6 s gap) |
+
+**Pickup** — collectible entity in level.
+| Field | Unit | Range |
+|---|---|---|
+| type | enum | "ammo_pulse" / "ammo_scatter" / "ammo_rail" / "ammo_arc" / "health" / "shield" / "coin" |
+| x, y | px | per spawn |
+| amount | int | ammo: 20/6/3/10; health: 25; shield: 20; coin: 1 |
+
+**Platform** — a solid tile or slab.
+| Field | Unit | Range |
+|---|---|---|
+| x, y, w, h | px | w: 32–320; h: 16 or 32 |
+| type | enum | "solid" / "one_way" / "crumble" |
+| crumbleTimer | s | 0 → 1.5 (when stood on, starts counting; at 1.5 removes) |
+
+**Hazard** — damaging geometry.
+| Field | Unit | Range |
+|---|---|---|
+| type | enum | "spike" / "laser_gate" / "acid_pool" |
+| x, y, w, h | px | per placement |
+| damage | points/tick | spike: 20 (instant, 1.2 s invuln); laser_gate: 25 (contact); acid_pool: 10/s |
+| laserPeriod | s | 2.0 (on 1.0, off 1.0) |
+
+**LevelSeed** — integer, 32-bit, chosen at title or re-rolled.
+
+**StageProgress** — tracks run state.
+| Field | Unit | Range |
+|---|---|---|
+| currentWorld | int | 1–2 |
+| currentStage | int | 1–5 |
+| lives | int | 3 (start) |
+| unlockedWeapons | set | {{"pulse_rifle"}} at start |
+
+**ScoreBoard** — per-stage record.
+| Field | Unit | Range |
+|---|---|---|
+| clearTime | s | measured |
+| enemiesKilled | int | measured |
+| coinsCollected | int | measured |
+| stars | int | 0–3 (see Progression) |
+
+---
+
+# 3. SYSTEMS
+
+SYSTEMS: Movement, Combat, WeaponSwitch, DamageAndDeath, EnemyAI, BossAI, PickupAndAmmo, LevelGenerator, StageFlow, Scoring
+
+## Movement
+
+**RULES (player-triggered):**
+
+- **Left / Right** (A, ←, D, →, touch joystick L/R): set `Player.vx` toward ±280 px/s with acceleration 1800 px/s²; if no horizontal key held, decelerate at 2400 px/s² toward 0. Capping: |vx| ≤ 280 (crouching: ≤ 140).
+- **Jump** (W, ↑, Space, touch A-button): if `Player.jumpCount < 2` AND `Player.state ≠ "crouching"` → apply `vy = −480`; `jumpCount += 1`. If `Player.state == "crouching"` → un-crouch first (1-frame, no jump this press).
+- **Double-jump**: second press while airborne and `jumpCount == 1` → `vy = −400`; `jumpCount = 2`.
+- **Crouch** (S, ↓, touch B-button held): if `Player.state == "grounded"` → set `state = "crouching"`, `crouchHeight = 28`, `vx` cap = 140. Release → restore height 48, `state = "grounded"`. While crouching, hitbox shrinks to 28 px tall (passes under 32-px gaps).
+- **Gravity**: every frame, `vy += 1400 * dt`. Terminal vy = 700 px/s.
+- **One-way platforms**: if `vy > 0` AND player bottom was above platform top last frame → land. If player presses S while on one-way → fall through (set `vy = 60`, disable platform collision for 0.2 s).
+- **Crumble platforms**: when player lands on `type == "crumble"`, start `crumbleTimer`. At 1.5 s, platform is removed; player falls.
+- **Level bounds**: clamp `Player.x` to [40, levelWidth − 40]. If `Player.y > levelHeight + 100` → instant death (pit).
+
+## Combat
+
+**RULES (player-triggered):**
+
+- **Fire** (mouse click / touch FIRE button / J key): if `AmmoPool[activeWeapon] > 0` AND `fireCooldown ≤ 0`:
+  - Decrement ammo by 1.
+  - Spawn `pelletsPerShot` projectile(s) at player muzzle offset (facing × 24 px, y − 8 px for standing; y − 4 for crouching).
+  - Each projectile: velocity = `projSpeed` in facing direction ± `spread` random angle per pellet.
+  - Set `fireCooldown = 1 / fireRate`.
+  - Rail Lance: while `fireCooldown > 0`, player cannot move horizontally (recoil lockout 0.15 s of the 1.1 s cooldown).
+  - Arc Burst: on projectile hit, if `chainRadius > 0`, find nearest other enemy within 90 px of impact → spawn secondary projectile toward it (damage × 0.6, one chain only).
+- **Weapon Switch** (1/2/3/4 keys, or Q cycles, or touch weapon-wheel tap): set `activeWeapon` to chosen id if in `StageProgress.unlockedWeapons`. No cost, instant.
+
+**RULES (automatic):**
+
+- Projectile updates position by `projSpeed * dt`. Remove when `projectileLife` elapsed or hits solid platform.
+- Projectile vs Enemy: subtract `damage` from `Enemy.hp`. If `pierceCount > 0`, decrement and continue; else remove projectile.
+
+## DamageAndDeath
+
+**RULES:**
+
+- Player takes damage: subtract from `shield` first, then `hp`. Set `invulnTimer = 1.2`, `shieldRegenDelay = 0`. If `hp ≤ 0` → `state = "dead"`, lives − 1, respawn at stage checkpoint after 1.5 s fade.
+- Shield regen: if `shieldRegenDelay ≥ 2.0` AND `shield < 50` → `shield += 12/s`. Reset `shieldRegenDelay` to 0 on any hit.
+- Contact damage from enemies: if player hitbox overlaps enemy hitbox AND `invulnTimer ≤ 0` → apply `Enemy.damage`.
+- Hazard damage per Hazard record.
+- Lives = 0 → "Game Over" screen → restart current world at Stage 1 with full HP/shield and default ammo.
+
+## EnemyAI
+
+**RULES (automatic, per enemy, each frame):**
+
+- **Perception**: compute distance from enemy to player. If `dist ≤ aggroRange` AND enemy.state ≠ "dead" → `state = "chase"`. Else if `state == "chase"` AND `dist > aggroRange × 1.4` → revert to "patrol".
+- **Patrol** (drone, runner): move at `vx` in `patrolDir`. Reverse `patrolDir` after traveling `patrolRange` from spawn or at platform edge.
+- **Drone chase**: move toward player at `vx` with sine vertical bob (amplitude 12 px, period 1.0 s). Stop at 100 px from player. Fire 1 slow bullet (speed 180, damage 10) every `attackCooldown`.
+- **Sentry chase**: rotate to face player. Fire aimed bullet (speed 300, damage 15) every `attackCooldown`.
+- **Runner chase**: set `vx` toward player at 160. On contact → deal 18 damage, play 0.4 s lunge animation, reset cooldown.
+- **Mine**: static. If player center within 60 px → begin 0.6 s fuse → explode: deal 35 damage to player if within 70 px radius; destroy self.
+- **Shieldbot chase**: shuffle toward player at 60. Frontal hitbox (32 px wide) blocks projectile damage; rear/above hitbox takes full damage. Contact deals 20. Slam attack every 2.0 s: 0.3 s windup, then 0.2 s active (damage 20, radius 50 px, knockback player 120 px/s away).
+
+## BossAI
+
+**RULES (automatic, per boss, each frame):**
+
+- Boss is stationary (or moves per attack). Player must dodge and shoot.
+- Phase advances when `Boss.hp ≤ phaseTransitionHP` → 1.0 s invulnerable transition flash, then new attack set enabled.
+- Execute attack list on timers as specified. All attacks deal damage to Player if hitbox overlaps.
+- Boss hitbox: 80×100 px (Custodian), 90×120 px (Architect). Player projectiles deal `Weapon.damage` normally. Rail Lance pierce does NOT pierce the boss (treated as 1 hit).
+- On `Boss.hp ≤ 0`: play 3 s death sequence, spawn "extraction pad" → StageFlow advances.
+
+## PickupAndAmmo
+
+**RULES:**
+
+- Player hitbox overlaps Pickup → apply effect, remove Pickup, play collect sound.
+- Ammo pickups add `amount` to corresponding `AmmoPool` entry, capped at max.
+- Health pickup: `hp = min(hp + 25, 100)`.
+- Shield pickup: `shield = min(shield + 20, 50)`.
+- Coin: increment `ScoreBoard.coinsCollected`.
+- Pickup respawn: NONE within a stage. Once collected, gone until stage restart.
+
+## LevelGenerator (SEEDED GENERATOR)
+
+**Parameters**: `LevelSeed` (int), `world` (1–2), `stage` (1–5), `difficultyScale` (1.0 default, 1.4 in NG+).
+
+**Places, in order:**
+
+1. **Floor/ground**: continuous solid platform at y = 480 (level height 560), width = 3200 px (stages 1–4) or 1600 px (boss stage 5). Gaps: place `gapCount` gaps of width 48–96 px, spaced every 300–500 px. `gapCount = 4 + stage + world` (stage 1 W1 → 6 gaps; stage 4 W2 → 10 gaps). Pit below gap = instant death.
+
+2. **Mid-platforms**: `platCount = 6 + stage × 2` one_way and solid platforms, y ∈ {{320, 384, 256}}, x spaced 200–400 px apart, w ∈ {{64, 96, 128, 192}}. Crumble platforms: `crumbleCount = 2 + stage` placed at y=256 only.
+
+3. **Upper platforms / ceilings**: `ceilCount = 3 + stage` solid slabs at y ∈ {{128, 160}}, w ∈ {{96, 128}}, forcing crouch passages (gap height = 32 px between slab and lower platform).
+
+4. **Enemies**: spawn list = `enemyCount = 5 + stage × 2 + (world × 3)` enemies. Distribute types by world:
+   - World 1: 40% drone, 30% runner, 20% sentry, 10% mine.
+   - World 2: 20% drone, 25% runner, 25% sentry, 15% mine, 15% shieldbot.
+   Place at x ∈ {{400 … levelWidth−200}}, y on nearest platform surface. Aggro ranges apply.
+
+5. **Hazards**: `hazardCount = 2 + stage` spikes (placed in gap edges or on floor) + 1 laser_gate per stage (at x ∈ {{800, 1600, 2400}}, period 2.0 s). World 2 adds acid_pool in 1 gap.
+
+6. **Pickups**: 2 ammo (random type, weighted toward active weapon), 1 health, 1 shield, 6–10 coins scattered on platforms and in air pockets.
+
+7. **Checkpoint**: solid flag at x = levelWidth × 0.5 (stage 3+ only). Touching sets respawn point.
+
+8. **Extraction pad**: at x = levelWidth − 80, y = 480. Triggers StageFlow on overlap.
+
+9. **Weapon unlock crates** (fixed): Stage 1 World 1 → none. Stage 2 World 1 → Scatter Cannon. Stage 3 World 1 → Arc Burst. Stage 4 World 1 → Rail Lance. Stages in World 2 → ammo/health only.
+
+**VERIFIER**: (a) No enemy or hazard placed inside a solid platform. (b) Every gap is jumpable: max gap width ≤ 96 px AND a platform exists within 120 px horizontal reach at a height the player can jump to. (c) At least 1 health pickup before the midpoint of any stage. (d) Crouch passages are passable: clearance ≥ 28 px. (e) No pickup is unreachable (verify path exists from ground to pickup y using max jump height 180 px). **If any check fails, re-roll with the next seed (seed+1) and regenerate.**
+
+## StageFlow
+
+**RULES:**
+
+- Touch Extraction Pad → stage complete → show Stage Clear screen → advance `currentStage`.
+- If `currentStage > 5` → advance `currentWorld`, reset `currentStage = 1`. If `currentWorld > 2` → Game Complete screen.
+- Boss stages (stage 5): level is arena-only (1600 px wide, flat floor, 4 one-way platforms at corners). No extraction pad; defeating boss triggers clear.
+- Death: respawn at checkpoint (or stage start if before checkpoint). Lives − 1. If lives = 0 → Game Over.
+
+## Scoring
+
+**RULES:**
+
+- Stars per stage: 1 star = clear. 2 stars = clear + ≥ 60% enemies killed. 3 stars = clear + ≥ 60% enemies killed + all coins + time ≤ par_time.
+- `par_time` = 45 s + stage × 10 s (stage 1 = 55 s, stage 5 = 95 s).
+- Total stars tracked on ScoreBoard; shown on world-select and end screen.
+
+---
+
+# 4. PROGRESSION AND DIFFICULTY
+
+**Unlock order:**
+- Start: Pulse Rifle only, 120 ammo, 100 HP, 50 shield, 3 lives.
+- Stage 1-2 (World 1, Stage 2): Scatter Cannon unlocked, +24 shells.
+- Stage 1-3 (World 1, Stage 3): Arc Burst unlocked, +40 cells. Checkpoint introduced.
+- Stage 1-4 (World 1, Stage 4): Rail Lance unlocked, +10 charges.
+- Stage 1-5: Boss 1 (Custodian, 600 HP).
+- Stage 2-1 through 2-4: All four weapons available; ammo refills to start values each stage; enemy density and HP × 1.2 (World 2 baseline).
+- Stage 2-5: Boss 2 (Architect, 1100 HP). Game ends.
+
+**Difficulty curve (numbers that make early easy, late hard):**
+- W1S1: 7 enemies, 6 gaps, 2 hazards. Player learns movement + pulse rifle. Very forgiving.
+- W1S3: 11 enemies, 8 gaps, 4 hazards, checkpoint. Introduces shieldbot? No—shieldbots are W2. Introduces mines + crouch passages.
+- W1S4: 13 enemies, 10 gaps, 5 hazards. Rail Lance introduced here; player must use it to pierce drone clusters.
+- W2S1: 10 enemies (now includes shieldbots), 7 gaps, 3 hazards + acid. HP of all enemies × 1.2.
+- W2S4: 16 enemies, 10 gaps, 6 hazards. All enemy types mixed.
+- Bosses: phase 2 adds charge/teleport; phase 3 adds summons. Player must manage ammo across 4 weapons to sustain DPS.
+
+**Where the player is expected to fail:**
+- Boss phase 3 (both bosses): first attempt likely results in death. Recovery: respawn at stage start (full ammo), lives − 1. Player learns attack patterns.
+- Crouch-passage sequences in W2: first-time players die to a laser_gate they can't see while crouched. Recovery: checkpoint at mid-stage means only half the stage replays.
+- If all 3 lives lost: Game Over → restart current world at Stage 1, ammo reset, lives reset to 3. No permanent loss.
+
+**NG+**: unlocked after full clear. All enemy HP × 1.4, enemy count × 1.3, boss HP × 1.3, par_times reduced 20%. Ammo caps unchanged.
+
+---
+
+# 5. FEEL
+
+| Parameter | Value | Tuned to achieve |
+|---|---|---|
+| Player run speed | 280 px/s | Fast enough to feel momentum, slow enough to aim shots |
+| Crouch speed | 140 px/s | Half-speed forces deliberate crouch traversal |
+| Acceleration | 1800 px/s² | Reaches top speed in ~0.16 s; snappy start |
+| Deceleration | 2400 px/s² | Stops in ~0.12 s; responsive feel, no ice-skating |
+| Jump velocity | −480 px/s | ~180 px peak height; clears 2-tile gaps comfortably |
+| Double-jump velocity | −400 px/s | Slightly weaker; feels like a second push, not a reset |
+| Gravity | 1400 px/s² | Snappy arc; fall from 180 px in ~0.5 s |
+| Terminal velocity | 700 px/s | Prevents infinite fall speed; pits feel deadly |
+| Coyote time | 0.08 s | Walk off edge → can still jump; forgiving |
+| Jump buffering | 0.10 s | Press jump just before landing → jump fires on land |
+| Fire rate feel (Pulse) | 7 shots/s | ~143 ms between shots; rapid but visible |
+| Fire rate feel (Scatter) | 1.5 shots/s + 0.6 s cooldown | Pump-action rhythm; 0.6 s lockout = "rack the shotgun" |
+| Rail Lance lockout | 0.15 s of 1.1 s | Brief movement freeze = weight of the shot |
+| Knockback (enemy hit on player) | 120 px impulse, 0.15 s | Pushes player back visibly without losing control |
+| Hit flash duration | 0.1 s white | Readable feedback without obscuring gameplay |
+| Invulnerability after hit | 1.2 s | Enough to reposition; not so long it trivializes damage |
+| Shield regen start | 2.0 s after hit | Creates tension window; rewards avoidance |
+| Shield regen rate | 12 pts/s | Full shield in ~4.2 s of not being hit |
+| Crumble platform timer | 1.5 s | Enough to jump off; punishes lingering |
+| Laser gate period | 2.0 s (1.0 on / 1.0 off) | Readable rhythm; player learns the beat |
+| Drone bullet speed | 180 px/s | Slow enough to dodge; fast enough to feel threatening |
+| Sentry bullet speed | 300 px/s | Requires lateral movement or crouch to avoid |
+| Boss slam shockwave speed | 200 px/s | Player must jump over; clear tell |
+| Camera look-ahead | 120 px | Shows 1/3 of screen ahead; player sees enemies coming |
+| Camera vertical dead-zone | ±80 px | Prevents jitter on small hops; activates on tall jumps |
+| Death respawn fade | 1.5 s | Brief pause to register failure; not long enough to frustrate |
+| Screen shake (explosion/hit) | 4 px, 0.15 s | Impact feedback without nausea |
+
+---
+
+# 6. HUD AND SCREENS
+
+## Screen State Machine
+
+```
+TITLE → WORLD_SELECT → STAGE_PLAY → STAGE_CLEAR → (loop or) → WORLD_SELECT
+                                          ↓
+                                     GAME_OVER → TITLE
+STAGE_PLAY → (lives=0) → GAME_OVER → TITLE
+STAGE_PLAY → (boss dead, W2S5) → GAME_COMPLETE → TITLE
+```
+
+**TITLE**: Shows game name "GRIDFALL", "Press Enter / Tap to Start", best total stars if any save exists. Enter/Tap → WORLD_SELECT.
+
+**WORLD_SELECT**: Shows 2 world slots (Floor 1, Floor 2). Floor 2 locked until Floor 1 boss defeated. Each world shows 5 stage icons with earned stars. Arrow keys / tap to select stage. Enter → STAGE_PLAY. Escape → TITLE.
+
+**STAGE_PLAY**: The gameplay screen. HUD overlaid. Escape → PAUSE.
+
+**PAUSE** (overlay on STAGE_PLAY): Shows "PAUSED", Resume (Escape/Enter), Restart Stage (R), Quit to World Select (Q). Escape again → resume.
+
+**STAGE_CLEAR**: Shows stage name, clear time, enemies killed %, coins collected, stars earned (1–3). "Press Enter to continue." Enter → next stage STAGE_PLAY or WORLD_SELECT if boss.
+
+**GAME_OVER**: "SYSTEM FAILURE — Lives exhausted." Shows stage reached. "Press Enter to restart world." Enter → WORLD_SELECT (stage 1 of current world).
+
+**GAME_COMPLETE**: "SPIRE PURGE COMPLETE." Shows total stars (max 30), best time. "Press Enter to return to title." Enter → TITLE.
+
+## Controls Summary (all screens)
+
+| Input | STAGE_PLAY | Menus |
+|---|---|---|
+| A / ← / D / → | Move left / right | Navigate options |
+| W / ↑ / Space | Jump | Confirm / select |
+| S / ↓ | Crouch (hold) | Navigate down |
+| 1 / 2 / 3 / 4 | Switch weapon | — |
+| Q | Cycle weapon | Quit to World Select (Pause) |
+| Mouse click / J / Touch FIRE | Shoot | — |
+| Touch joystick | Move | — |
+| Touch A / B | Jump / Crouch | — |
+| Escape | Pause / Resume | Back / Quit |
+| Enter | — | Confirm |
+| R | Restart stage (Pause) | — |
+
+## HUD (visible during STAGE_PLAY)
+
+| Element | Record Field Shown | Visibility |
+|---|---|---|
+| HP bar (left, 120 px wide, green→red) | `Player.hp` / 100 | Always |
+| Shield bar (below HP, blue, 120 px) | `Player.shield` / 50 | Always (dimmed if 0) |
+| Lives counter (3 small icons, top-left) | `StageProgress.lives` | Always |
+| Weapon name + ammo count (bottom-left) | `StageProgress.activeWeapon` + `AmmoPool[activeWeapon]` | Always |
+| Weapon icon row (4 slots, active highlighted) | `StageProgress.unlockedWeapons` | Always; locked slots show "?" |
+| Stage indicator (top-center: "W1-S3") | `StageProgress.currentWorld` / `currentStage` | Always |
+| Timer (top-right, counts up) | `ScoreBoard.clearTime` | Always |
+| Coin count (top-right, below timer) | `ScoreBoard.coinsCollected` | Always |
+| Boss HP bar (top-center, wide, appears in stage 5) | `Boss.hp` / `Boss.maxHP` | Boss stage only, from first player contact with arena |
+| Checkpoint flash (brief "CHECKPOINT" text) | Triggered on touch | 1.0 s on activation |
+| Low-ammo warning (weapon icon pulses red) | `AmmoPool[activeWeapon] ≤ 10%` of max | While condition true |
+</gameplay.md>
+
+<visual.md>
+# 1. THE LOOK IN ONE PARAGRAPH
+
+2D, side-scrolling camera (horizontal follow, no rotation, fixed zoom). The game is a neon-soaked post-industrial wasteland: a lone scavenger in a battered exo-suit blasts through the skeletal remains of a drowned mega-city. The palette is deep oxidized teal (#1A2E33) and rust-orange (#C45A2D) as the ground truth, punctuated by electric cyan (#00E5FF) and hot magenta (#FF2D78) from gunfire, signage, and bioluminescence. The mood is "gritty Saturday-morning cartoon"—chunky readable shapes, bold outlines, and exaggerated squash-and-stretch on every impact. The screenshot that sells it: the player mid-air, crouching-then-jumping off a rusted conveyor belt, magenta plasma bolt streaking right, a two-story enemy robot reeling with a cyan hit-flash, parallax layers of dripping pipes and flickering neon signs visible in the background, all rendered in thick 3-pixel black outlines over flat saturated fills.
+
+# 2. THE SPACE
+
+**Coordinate system:** 1 unit = 1 game-pixel at base resolution (960×540 viewport). The player stands 3 units tall, 2 units wide. Tiles are 1×1 unit. A stage is a horizontal corridor 240 units wide × 24 units tall (20 visible, 4 of dead air above).
+
+**Stage layout (per stage, left → right):**
+
+| Region | Width (units) | Contents | Visual tell |
+|---|---|---|---|
+| Spawn ledge | 0–12 | Flat ground, a single flickering lamp post, the "start" banner | Warm sodium glow (#FFB347) pools on the floor |
+| Mid traversal | 12–160 | Platforms, pits, enemy spawns, pickups, environmental hazards (steam vents, conveyor belts, electrified water) | Background parallax shifts; ground texture changes every 40 units |
+| Checkpoint shrine | at 80, 120, 160 (some stages) | A glowing totem the player touches to save | Pulsing cyan ring, hum particles |
+| Arena / boss room | 160–220 | Enclosed space, 3 layers of platforms, boss spawn pad | Lighting drops to 60%, single overhead spotlight, walls close in (ceilings lower to 16 units) |
+| Exit gate | 220–240 | A massive shutter door with a stage-number stencil, confetti cannons | Magenta (#FF2D78) rim-light on the door frame |
+
+**World 1 – "The Rustbelt":** Ground is corrugated steel plates and broken concrete. Backgrounds show smokestacks, hanging chains, conveyor machinery. Palette skews rust-orange dominant. Stage 5 is the boss arena: a giant hydraulic press room, ceiling at 20 units, floor is a grate over boiling oil.
+
+**World 2 – "The Undercity":** Ground is cracked tile and flooded shallow channels (1 unit deep, ankle-high). Backgrounds show dripping brick arches, subway tunnels, bioluminescent moss. Palette skews deep teal dominant with magenta/cyan fungi pops. Stage 5 boss arena: a drained reservoir with concentric ring platforms.
+
+**Stage progression visual cue:** Each stage number (1–5) adds one more background parallax layer and one more colour accent. Stage 1: 2 layers, 2 accents. Stage 5: 4 layers, 4 accents. The player should feel the world "filling in" as they advance.
+
+**Generated vs. hand-placed:** Stage geometry is hand-placed (fixed platform layouts per stage). Enemy spawn positions and pickup locations are hand-placed. A "good roll" for the verifier: the player can always reach the exit gate via a continuous chain of platforms no wider than 6-unit gaps and no higher than 4-unit steps. A "bad roll": a gap wider than 7 units with no intermediate platform, or a required jump above 5 units with no crouch-jump assist ledge.
+
+# 3. RECIPES
+
+| Name | Shapes & Size (units) | Colours (hex) | Count | Motion / Effect |
+|---|---|---|---|---|
+| **Player – idle** | Rounded rect body 2×3, circle head r=0.7 atop, 2 stub arms, 2 stub legs. 3px black outline. | Suit: #2C3E50 (dark steel). Visor: #00E5FF. Accents: #FF2D78. | 1 | 2-frame breathing bob (y ±0.05, 0.8s cycle) |
+| **Player – crouch** | Squashed rect 2×1.8, head tucks into shoulders. | Same | 1 | None (static pose) |
+| **Player – run** | Same body, legs alternate 4-frame stride (y ±0.1 bounce). | Same | 1 | Leg cycle at stride frequency; dust puffs (#8B7355, r=0.3, fade 0.3s) at feet |
+| **Player – jump** | Body stretched vertically 1.8×3.6, arms up. | Same | 1 | Launch squash → stretch → return. Trail: 3 ghost copies at 40% alpha, 0.1s apart |
+| **Player – hurt** | Same body, tinted #FF2D78 at 70% opacity, 3-frame flash. | Flash: #FF2D78 → white → back | 1 | 0.15s per frame, knockback wobble (x ±0.2) |
+| **Player – death** | Body shatters into 8 triangle shards (r=0.4 each), fly outward. | Shards: #2C3E50 with #FF2D78 edges | 1 | Shards spin and fade over 1.2s |
+| **Gun – Rivet Driver (default)** | Rect barrel 1.5×0.4, circle muzzle r=0.25. | Body: #5C6B73. Muzzle ring: #FFB347. | 1 | Recoil: barrel x-offset −0.3 for 0.08s |
+| **Rivet Driver – projectile** | Small circle r=0.15, trailing line 0.5. | Core: #FFB347. Trail: #FFB347→transparent. | On-screen max 12 | Linear, no arc. Fades at 40-unit range |
+| **Gun – Scatter Cannon (shotgun)** | Wide rect barrel 1.2×0.7, 3 muzzle ports r=0.12 each. | Body: #8B4513 (leather grip). Ports: #FF2D78. | 1 | Muzzle flash: 3 radial lines 0.8 long, #FF2D78, 0.06s |
+| **Scatter – projectile (×5 pellets)** | Tiny circles r=0.1, spread 30° cone. | #FF2D78 | 5 per shot | Linear, fade at 12-unit range |
+| **Gun – Arc Welder (plasma/beam)** | Cylindrical barrel 2×0.5, glowing coil rings ×3. | Body: #1A2E33. Coils: #00E5FF. | 1 | Continuous beam: rect 0.3 wide, length 30 units, gradient #00E5FF→#FF2D78, 6 flicker frames |
+| **Arc Welder – beam** | Rect 0.3×30, wavy edges (sine amp 0.1). | #00E5FF core, #FF2D78 edge glow | 1 active | Flickers 60Hz; impact sparks on wall |
+| **Gun – Mortar Launcher (explosive)** | Short fat rect 0.8×0.9, curved arm. | Body: #4A3728. Warhead: #FF2D78. | 1 | Launch: barrel tilts up 15° for 0.12s |
+| **Mortar – projectile** | Circle r=0.3, 4 tiny fins. | #FF2D78 body, #FFB347 fins | On-screen max 3 | Parabolic arc (gravity). Explodes on land |
+| **Mortar – explosion** | Expanding circle r=0→4 over 0.3s, then 8 triangle shards. | Ring: #FFB347→#FF2D78→transparent. Shards: #4A3728 | 1 per detonation | Radial burst, smoke puffs ×6 (#666, r=0.5, drift up, 0.8s) |
+| **Enemy – Rust Crawler (ground, W1)** | Low rect 2×1.2, 4 stub legs, single red eye r=0.2. | Body: #C45A2D. Eye: #FF2D78. | 3–6 per stage | 4-frame leg crawl, y ±0.05 bob |
+| **Enemy – Rust Crawler – hurt** | Same, white flash overlay. | Flash: #FFFFFF 50% | 1 | 0.1s |
+| **Enemy – Dripling (flying, W2)** | Teardrop body 1×1.5, 2 wing arcs r=0.8. | Body: #00E5FF. Wings: #1A2E33. Eye: #FF2D78. | 2–5 per stage | Sine-wave hover (y ±0.5, 1.2s). Wings flap 4-frame |
+| **Enemy – Dripling – hurt** | Same, magenta flash. | #FF2D78 60% | 1 | 0.1s |
+| **Enemy – Press Golem (W1 boss)** | Massive rect 6×8, piston arms ×2 (3×1 each), single visor slit. | Body: #3D3D3D. Pistons: #C45A2D. Visor: #FFB347. | 1 | Idle: slow hydraulic hiss (steam puffs from joints). Attack: arm slam, screen shake |
+| **Enemy – Reservoir Warden (W2 boss)** | Octagonal core r=3, 4 rotating tentacle arms (length 5, r=0.3). | Core: #1A2E33. Arms: #00E5FF. Eye: #FF2D78. | 1 | Arms rotate 15°/s. Charge: core pulses magenta |
+| **Pickup – Health Cell** | Hexagon r=0.5, cross icon inside. | Shell: #00E5FF. Cross: #FFFFFF. | 2–4 per stage | Float y ±0.2 sine, 1s. Glow halo r=1.2, 40% alpha |
+| **Pickup – Ammo Crate** | Rect 1×1, lid at 30° angle, bullet icon. | Body: #FFB347. Lid: #8B7355. | 1–2 per stage | Static; wobble 0.05 when player nears (2-unit radius) |
+| **Pickup – Stage Key (exit)** | Diamond r=0.7, spinning. | #FF2D78 with #FFB347 inner glow | 1 per stage | Spin 180°/s, bob 0.15 |
+| **Checkpoint Totem** | Pillar 1×4, glowing orb r=0.5 atop. | Pillar: #2C3E50. Orb: #00E5FF. | 0–3 per stage | Inactive: orb dim #1A2E33. Active: orb bright, ring pulses outward r=0.5→2, 1.5s loop |
+| **Platform – Solid** | Rect, variable width ×1. Top surface 0.15 lighter strip. | W1: #5C6B73 top #8B7355. W2: #1A2E33 top #2C4A52. | Many | Static |
+| **Platform – Crumble** | Same as solid, 4 crack lines. | #8B7355 with #C45A2D cracks | 1–3 per stage | Static until touched; then 0.4s shake → 6 shard pieces fall |
+| **Platform – Conveyor** | Rect with 6 directional chevrons scrolling. | Body: #3D3D3D. Chevrons: #FFB347. | 1–2 per stage | Chevrons scroll x at constant speed (visual only) |
+| **Haz – Steam Vent** | Floor grate 1.5×0.3, vertical column of circles. | Grate: #5C6B73. Steam: #FFFFFF 30%→transparent. | 1–4 per stage | Column pulses upward, 6 puffs r=0.4, 0.8s cycle |
+| **Haz – Electrified Water** | Rect pool 20×1, wavy top edge. | #00E5FF 50% alpha, white sparks ×3 r=0.15 | 1–2 per stage (W2) | Wave sine 0.1 amp; sparks blink 0.2s random |
+| **Haz – Spikes** | Row of triangles base 0.4 height 0.6. | #8B7355 with #FF2D78 tips | Clusters of 4–8 | Static |
+| **BG Layer 1 – Far skyline** | Silhouette rects/triangles, parallax 0.2×. | W1: #0F1B1F. W2: #0A1618. | Full-width | Static (camera parallax only) |
+| **BG Layer 2 – Mid structures** | Pipes, arches, smokestacks, parallax 0.5×. | W1: #1A2E33. W2: #15292E. | Full-width | Parallax scroll |
+| **BG Layer 3 – Near detail** | Dripping chains, fungi clusters, broken signs, parallax 0.8×. | W1: #2C3E50. W2: #1E3A40. | Full-width | Parallax scroll; drips fall (0.3s, 4-unit drop) |
+| **BG Layer 4 – Foreground fog** | Horizontal gradient band, bottom 3 units. | #1A2E33 20% alpha | Full-width | Static |
+| **Neon Sign (decor)** | Rect frame 3×1.5, text shape inside. | Frame: #2C3E50. Text: #FF2D78 or #00E5FF. | 2–4 per stage | Flicker: 80% on, 20% random 0.1s off. Buzz: tiny y jitter 0.02 |
+| **Exit Gate** | Rect 4×6, shutter lines ×8, stencil number. | Door: #3D3D3D. Rim: #FF2D78. Number: #FFB347. | 1 per stage | Closed: static. Opening: shutter slides up 0.8s, light floods from behind (#FFB347 radial) |
+| **UI – HUD bar** | Rect 20×1.5 top-left. | BG: #0F1B1F 80% alpha. Border: #2C3E50. | 1 | Static |
+| **UI – Health bar** | 3 hearts inside HUD, r=0.4 each. | Full: #FF2D78. Empty: #3D3D3D. | 1 set | Pulse scale 1.1 when <1 heart, 0.5s |
+| **UI – Ammo counter** | Text block 4×1.5 top-right. | Text: #FFB347. BG: #0F1B1F 80%. | 1 | Flash white 0.1s on pickup |
+| **UI – Gun selector** | 4 small icons (0.8×0.8) bottom-left, active has ring. | Inactive: #5C6B73. Active ring: #00E5FF. | 1 set | Active icon pulses scale 1.0→1.15, 0.6s |
+| **UI – Stage banner (intro)** | Full-screen rect, large stencil text. | BG: #0F1B1F. Text: #FFB347. Sub: #00E5FF. | 1 per stage | Slide in from top 0.6s, hold 1.5s, fade out 0.4s |
+| **UI – Death screen** | Dark overlay, "SCRAPPED" text, retry button. | Overlay: #0F1B1F 85%. Text: #FF2D78. Button: #FFB347. | 1 | Fade in 0.8s. Button pulses 0.8s |
+| **UI – World map** | 2×5 grid of stage nodes, connecting path line. | Path: #FFB347. Completed node: #00E5FF. Locked: #3D3D3D. Current: #FF2D78 pulse. | 1 | Player icon walks along path between nodes |
+| **Particle – Hit spark** | 6 radial lines, length 0.6. | #FFFFFF → #FFB347 | 1 per hit | 0.1s, scale 1→0 |
+| **Particle – Pickup sparkle** | 8 tiny stars r=0.1, spiral outward. | #FFB347, #00E5FF | 1 per pickup | 0.4s, fade |
+| **Particle – Dust (land)** | 3 ellipses 0.5×0.25 at feet. | #8B7355 50%→0% | 1 per landing | 0.25s, drift outward |
+| **Particle – Checkpoint activate** | Expanding ring + 12 rising motes. | Ring: #00E5FF. Motes: #FFB347. | 1 per activation | Ring r=0→5 over 0.6s, fade. Motes rise 2 units, 0.8s |
+
+# 4. LIGHTING AND ATMOSPHERE
+
+**Ambient:** Very low. Base ambient colour #0F1B1F at 25% intensity. The world is dark; light sources are diegetic (lamps, neon, gunfire, bioluminescence).
+
+**Light sources (per stage, placed as decor):**
+
+| Source | Colour | Radius (units) | Motion |
+|---|---|---|---|
+| Sodium lamp post (spawn area) | #FFB347 | 8 | Static; subtle 0.03 flicker |
+| Neon sign | #FF2D78 or #00E5FF | 5 | Flicker (see recipe) |
+| Checkpoint orb (active) | #00E5FF | 6 | Pulse 4→6→4, 2s |
+| Gunfire (muzzle flash) | #FFB347 / #FF2D78 / #00E5FF (per gun) | 4 | Instantaneous, 0.06s |
+| Bioluminescent moss (W2) | #00E5FF | 3 | Slow breathe, 4s cycle |
+| Boss arena spotlight | #FFFFFF 60% | 12 | Static cone from ceiling |
+| Exit gate (opening) | #FFB347 | 10 | Radial flood, 0.8s ramp |
+
+**Fog / darkness rules:** Background layers 1–2 are darkened by 40% relative to foreground. In W2 stages, a vertical fog band (#15292E, 30% alpha) sits at 60% height to separate the flooded lower half from the upper architecture. Boss arenas drop global ambient to 10%; only the spotlight and gunfire illuminate.
+
+**Time-of-day / weather:** None. Each world has a fixed "time": W1 is perpetual dusk (orange horizon glow in BG layer 1). W2 is perpetual night with no sky (closed tunnel ceiling in BG layer 1). No dynamic weather.
+
+**Post effects:**
+
+| Effect | Trigger | Strength / Duration |
+|---|---|---|
+| Vignette | Always on | 40% darkening at edges, radius 70% of viewport |
+| Screen shake | Player hit, boss slam, mortar explosion | Intensity 0.3 units, 0.2s. Decays linearly |
+| Hit flash (full screen) | Player takes damage | 1-frame #FF2D78 at 15% alpha |
+| Chromatic aberration | Low health (<1 heart) | 0.02-unit red/blue split, constant while low |
+| Grain | Always on | 3% monochrome noise, 24fps refresh |
+| Radial flash | Checkpoint activated | White ring expands from totem, 0.4s, 30% alpha |
+| Desaturation | Death | Screen desaturates to 20% colour over 0.8s |
+
+# 5. CHARACTERS AND ANIMATION
+
+## Player (the Scavenger)
+
+**Silhouette:** Chunky, top-heavy. Broad shoulders, short legs, oversized helmet with a glowing visor slit. The exo-suit has visible piston joints at knees and elbows. At a glance: "small tough thing with a big head and a big gun." The visor colour changes with equipped gun (cyan = Arc Welder, magenta = Scatter/Mortar, amber = Rivet).
+
+**Facings:** Left, Right (mirrored). Crouch, jump, and run states exist for both. No diagonal.
+
+| Animation | Frames / Rule | Loop |
+|---|---|---|
+| Idle | 2 frames: breathe (y ±0.05). Head tilts 2° alternating. | 0.8s loop |
+| Run | 4 frames: legs alternate, body bobs y ±0.1, arms swing ±15°. | 0.3s loop |
+| Crouch | 1 pose (static). Helmet retracts 0.2 into shoulders. | No loop |
+| Jump (ascend) | 1 pose: body stretch 1.8×, legs tucked, arms up. | Transition only |
+| Jump (descend) | 1 pose: body return, legs extend forward. | Transition only |
+| Land | 2 frames: squash 1.2× → normal. | 0.15s |
+| Shoot (Rivet/Scatter) | 2 frames: recoil lean back 5° → return. | 0.1s |
+| Shoot (Arc Welder) | 1 pose: arms locked forward, slight lean. | Hold while firing |
+| Shoot (Mortar) | 3 frames: crouch → stand → recoil. | 0.2s |
+| Hurt | 3 frames: white flash, wobble, recover. | 0.45s |
+| Death | Shatter into 8 shards (see recipe). | 1.2s, no loop |
+
+## Rust Crawler (W1 enemy)
+
+**Silhouette:** Low, wide, insect-like. Four legs splayed, single glowing eye on a stalk. At a glance: "a rusty beetle that scuttles."
+
+**Facings:** Left, Right.
+
+| Animation | Frames | Loop |
+|---|---|---|
+| Idle | 2 frames: eye stalk sways ±3°. | 1.2s |
+| Walk | 4 frames: legs alternate, body y ±0.05. | 0.4s |
+| Hurt | 1 frame: white flash, legs tuck. | 0.1s |
+| Death | Collapse: legs fold inward, body flattens to 0.6 height, fades. | 0.5s |
+
+## Dripling (W2 enemy)
+
+**Silhouette:** Floating teardrop with two moth-like wings. Glowing cyan body, single magenta eye. At a glance: "a angry glowing raindrop."
+
+**Facings:** Left, Right.
+
+| Animation | Frames | Loop |
+|---|---|---|
+| Hover | 4 frames: wings up/mid/down/mid, body sine y ±0.5. | 1.2s |
+| Lunge (attack) | 2 frames: stretch forward 1.5×, wings back. | 0.2s |
+| Hurt | 1 frame: magenta flash, body compresses. | 0.1s |
+| Death | Pop: expand to 1.3×, then shatter into 6 droplet circles, fade. | 0.6s |
+
+## Press Golem (W1 boss)
+
+**Silhouette:** A squat hydraulic press given legs. Two massive piston arms, a visor slit across its "face," exhaust pipes on shoulders. At a glance: "a construction press that wants to flatten you."
+
+**Facings:** Left, Right.
+
+| Animation | Frames / Rule | Loop |
+|---|---|---|
+| Idle | Steam puffs from joints every 1.5s. Body bobs y ±0.1. | 2s |
+| Arm Slam | 4 frames: arm raises 3 units → descends fast → impact squash → recover. | 0.8s |
+| Charge (telegraph) | Visor pulses amber 3× over 0.6s, body glows #FFB347. | Before attack |
+| Hurt | White flash on piston joints. | 0.1s |
+| Death | Pistons explode outward (8 shards), body crumbles over 2s, steam floods screen. | 2s |
+
+## Reservoir Warden (W2 boss)
+
+**Silhouette:** A floating octagonal core with four long segmented tentacle arms ending in claw pincers. Bioluminescent veins pulse across its surface. At a glance: "a deep-sea jellyfish made of subway infrastructure."
+
+**Facings:** Rotates; no fixed facing.
+
+| Animation | Frames / Rule | Loop |
+|---|---|---|
+| Idle | Arms rotate slowly (15°/s). Core pulses cyan. | Continuous |
+| Sweep | 2 arms extend 5 units in a line, core flashes magenta (telegraph 0.5s). | 1s |
+| Spin | All 4 arms extend, core spins 360° in 0.8s. | 0.8s |
+| Hurt | Core dims to 30% for 0.15s, veins flash white. | 0.15s |
+| Death | Core cracks (4 lines), collapses inward to r=0.5, then detonates in expanding cyan ring + 12 shard fragments. | 2.5s |
+
+# 6. FEEDBACK
+
+| Event | Visual | Duration |
+|---|---|---|
+| **Player hits enemy** | Hit-spark particles (6 radial lines, #FFFFFF→#FFB347) at impact point. Enemy flashes white 50%. Screen shake 0.1 units. | 0.1s |
+| **Enemy dies** | Enemy-specific death anim (see §5). +score popup text floats up 2 units, #FFB347. | 0.5–0.6s |
+| **Player takes damage** | Player flashes #FF2D78. Full-screen 1-frame pink overlay. Screen shake 0.3 units. Health heart depletes (crack + fade). Chromatic aberration activates if now at 1 heart. | 0.45s |
+| **Player at low health (1 heart)** | Heart pulses scale 1.0→1.15 every 0.5s. Vignette darkens to 55%. Red tint 8% on screen edges. | Persistent while low |
+| **Pickup collected (health/ammo)** | Pickup pops into 8 star particles (#FFB347/#00E5FF), floats up. HUD element flashes white. | 0.4s |
+| **Stage Key collected** | Diamond spins faster, expands to 1.5×, then teleports into HUD. Radial ring expands from player, #FFB347. | 0.6s |
+| **Checkpoint activated** | Ring expands from totem (r=0→5). 12 motes rise. Screen radial flash 30%. Totem orb turns from dim to bright cyan permanently. | 0.8s |
+| **Door / Exit Gate opening** | Shutter slides up over 0.8s revealing warm light behind (#FFB347 radial). Confetti particles (20 tiny rects, random palette colours) burst from top of gate. | 1.2s total |
+| **Timer running out (if stage has timer)** | Screen edges pulse red 3× (0.3s each). HUD timer text flashes #FF2D78. | 0.9s warning |
+| **Boss phase transition** | Screen flash white 100%. Boss roars (screen shake 0.5, 0.4s). New attack pattern telegraph colour appears on boss. | 1.0s |
+| **Gun switch** | Muzzle flash in new gun's colour at player position. HUD selector ring slides to new icon, 0.15s. | 0.2s |
+| **Player crouch-jump** | Dust puff at feet (3 ellipses, #8B7355). Player briefly in crouch pose then extends. | 0.15s |
+
+# 7. SCREENSHOT CHECKLIST
+
+| Screen / State | How to Reach | What a Reviewer Must See |
+|---|---|---|
+| **Title screen** | Launch game | Game logo in stencil font (#FFB347), subtitle in cyan (#00E5FF), "PRESS START" pulsing magenta. BG: parallax layers 1–3 visible, a single neon sign flickering. Vignette + grain active. |
+| **World map** | After title | 2×5 node grid. World 1 row: all 5 nodes. World 2 row: all 5 nodes locked (grey #3D3D3D). Path line in amber. Player icon at Stage 1-1. Completed nodes glow cyan. |
+| **Stage intro banner** | Enter any stage | Full-screen slide-in: "WORLD 1 – STAGE 1" in large stencil (#FFB347), subtitle "THE RUSTBELT" (#00E5FF), on dark BG (#0F1B1F). Holds 1.5s then fades. |
+| **Gameplay – W1 Stage 1, mid-run** | Play to unit ~60 | Player on a corrugated-steel platform, right-facing, running. BG layers: smokestacks (far), pipes (mid), dripping chain (near). One neon sign flickering in BG. Ground is rust-orange/steel. A Rust Crawler 2 platforms ahead. HUD visible: 3 magenta hearts, ammo counter, 4 gun icons bottom-left with Rivet Driver ringed cyan. |
+| **Gameplay – firing Scatter Cannon** | Equip gun 2, shoot | Muzzle flash: 3 radial magenta lines. 5 pellets fanning out in a 30° cone. Player in recoil lean-back pose. Gun selector ring on Scatter icon. |
+| **Gameplay – Arc Welder beam hitting wall** | Equip gun 3, shoot into surface | Continuous cyan→magenta wavy beam, 30 units long. Impact sparks (white, 6 radial lines) at wall. Coil rings on gun glowing. Beam flicker visible. |
+| **Gameplay – Mortar explosion** | Equip gun 4, lob projectile onto ground | Expanding ring (#FFB347→#FF2D78), 8 shard triangles flying out, 6 grey smoke puffs rising. Screen shake visible. |
+| **Gameplay – crouch under a low pipe** | Crouch beneath a 2-unit ceiling | Player in squashed crouch pose (1.8 tall), helmet retracted, passing under a pipe prop. Conveyor platform visible nearby with scrolling chevrons. |
+| **Gameplay – W2 Stage 3, flooded section** | Play W2 Stage 3 to mid | Player ankle-deep in electrified water (cyan, wavy top, white sparks). Drippling enemy hovering above. Bioluminescent moss on walls (pulsing cyan). BG: brick arches, dripping. Palette teal-dominant. |
+| **Checkpoint activation** | Touch a totem mid-stage | Ring expanding from totem orb, 12 amber motes rising. Orb now bright cyan. Radial white flash. Totem permanently lit. |
+| **Boss fight – Press Golem** | W1 Stage 5, enter arena | Arena lighting: ambient 10%, single overhead white spotlight cone. Press Golem (6×8) on far side, visor pulsing amber (telegraph). Player small in foreground. Steam puffs from Golem joints. Walls close in (ceiling at 20 units). |
+| **Boss fight – Reservoir Warden** | W2 Stage 5, enter arena | Drained reservoir with concentric ring platforms. Octagonal core floating centre, 4 tentacle arms extended. Bioluminescent veins pulsing. Player on innermost ring. Dark ambient, cyan glow dominant. |
+| **Player hurt – low health** | Take damage until 1 heart | Player flashing magenta. Screen: 55% vignette, red edge tint, chromatic aberration (slight red/blue offset on edges). Single heart pulsing. |
+| **Player death** | Health reaches 0 | Screen desaturated to 20% colour. 8 triangle shards of player body flying apart. "SCRAPPED" text in #FF2D78. Retry button pulsing #FFB347. |
+| **Stage clear / Exit Gate opening** | Collect key, reach gate | Shutter sliding up, warm #FFB347 light flooding out. 20 confetti rects scattering. Stage number stencil on door. Player walking toward light. |
+| **World clear (after W1 Stage 5)** | Defeat Press Golem, exit | Transition to World Map: W1 row all nodes now cyan (completed). W2 row unlocks—nodes shift from grey to amber outline. Player icon walks to W2 node 1. |
+| **Particle effects close-up** | Any moment with multiple effects | Hit sparks, dust puffs, pickup sparkles, and steam vent puffs all visible simultaneously. Distinct shapes: lines (sparks), ellipses (dust), stars (sparkle), circles (steam). All with 3px black outlines where applicable. |
+</visual.md>
+
+<engineering.md>
+# engineering.md
+
+**2D. The game view is rendered on a single `<canvas>` element using the Canvas 2D API.**
+
+---
+
+# 1. CONVENTIONS
+
+## Units & Axes
+
+| Item | Rule |
+|---|---|
+| 1 unit | 1 logical pixel. The canvas is sized to `1280 × 720` CSS px; internal resolution matches at `devicePixelRatio = 1`. |
+| Game-logic axes | **X** → right is positive. **Y** → **up** is positive (ground plane at `y = 0`). Gravity pulls in −Y. |
+| Render axes | Canvas default: X → right, Y → **down**. The renderer applies `ctx.scale(1, -1)` after translating to the camera offset so game-logic Y-up maps correctly. |
+| Origin (world) | Bottom-left corner of the level's tile grid. `worldOrigin = {{x: 0, y: 0}}`. |
+| Tile size | `<TILE_SIZE>` px (gameplay owns the value; engineering assumes it is a positive integer, typically 32). |
+| Camera | Follows the player. `camera.x` = left edge of viewport in world coords; `camera.y` = bottom edge of viewport. Clamped so the viewport never shows outside the level bounds. |
+
+## Update Loop
+
+- **Fixed timestep:** `DT = 1/60 ≈ 0.016666667 s`.
+- Each `requestAnimationFrame` callback accumulates real elapsed time, then runs zero or more fixed ticks, then draws **once**.
+- **Tick order (every system runs in this exact sequence):**
+  1. `input.update()` — latch new key/touch events into the current frame's input state.
+  2. `physics.update(DT)` — integrate velocities, resolve tile collisions, resolve entity–entity collisions.
+  3. `player.update(DT)` — state machine (idle / run / jump / crouch / shoot / hurt / dead).
+  4. `weapons.update(DT)` — fire cooldowns, spawn / advance / despawn projectiles.
+  5. `enemies.update(DT)` — AI state machines, patrol, chase, die.
+  6. `particles.update(DT)` — advance particle lifetimes, recycle dead ones.
+  7. `camera.update(DT)` — lerp / dead-zone follow, clamp to level bounds.
+  8. `progression.update(DT)` — check stage-clear conditions, trigger transitions.
+  9. `audio.update(DT)` — process queued sound events (purely reactive; never mutates game state).
+- **After all ticks for this frame:** `renderer.draw()` is called exactly once.
+
+## Random Source
+
+- **One** seeded PRNG: `mulberry32(seed)`, exposed as `ctx.rng()`. It returns a float in `[0, 1)`.
+- **Rule:** No call to `Math.random()`, `crypto.getRandomValues()`, `Date.now()`, or any other entropy source anywhere in game logic. The renderer and audio may use `Math.random()` for purely cosmetic jitter that is never read back into state. All gameplay randomness (enemy spawn waves, pickup drops, pattern selection) goes through `ctx.rng()`.
+
+## Controls
+
+| Input | Action |
+|---|---|
+| `A` / `←` | Move left (held) |
+| `D` / `→` | Move right (held) |
+| `W` / `↑` / `Space` | Jump (edge-triggered: fires once per press) |
+| `S` / `↓` | Crouch (held) |
+| `J` / `Z` / `Enter` | Fire current weapon (held = auto-repeat for auto weapons; edge for semi) |
+| `K` / `X` | Switch weapon forward (cycles through owned guns) |
+| `1` `2` `3` `4` `5` | Select weapon slot 1–5 directly |
+| `Esc` / `P` | Pause / Resume |
+| `R` | Restart current stage |
+| Touch – left half swipe/hold | Move left / right (analog by distance from centre of half) |
+| Touch – right half, top area | Jump (tap) |
+| Touch – right half, bottom area | Fire (hold) |
+| Touch – right half, middle area | Crouch (hold) |
+| Touch – two-finger tap | Switch weapon |
+
+All keyboard bindings are **both** WASD and arrow keys simultaneously. Touch events are synthesised into the same input-state object so no game code branches on input device.
+
+---
+
+# 2. MODULES
+
+| Module | Responsibility |
+|---|---|
+| `game.js` | Boot, state machine (title → play → pause → stage-clear → world-clear → game-over → title), owns the rAF loop, calls every other module in tick order. |
+| `input.js` | Reads `keydown/keyup/touchstart/touchmove/touchend`, writes `ctx.input`. Normalises keyboard + touch into one structure. |
+| `physics.js` | AABB tile collision, entity-vs-entity collision, gravity integration, ground detection. Pure geometry; no game rules. |
+| `player.js` | Player entity: state machine, health, lives, crouch height change, jump arc, invincibility frames, respawn. |
+| `weapons.js` | Weapon definitions (≥4 types), fire logic, projectile pool, damage application. |
+| `enemies.js` | Enemy definitions, per-type AI tick, spawn from level data, death → drop logic. |
+| `level.js` | Parses the tile-map array for the current stage, provides `isSolid(tx,ty)`, `isHazard(tx,ty)`, `tileAt(x,y)`, entity spawn lists. |
+| `camera.js` | Viewport rect, dead-zone follow, clamp to level bounds. |
+| `particles.js` | Ring-buffer pool of particle structs; spawn, update, query-alive for renderer. |
+| `audio.js` | Web Audio API: pre-built oscillator/noise buffers for SFX, a simple music sequencer. Queues events from other modules; never reads game state back. |
+| `progression.js` | World/stage index, unlock table, score accumulation, stage-clear / game-over conditions. |
+| `ui.js` | HUD (health bar, lives, weapon icon, ammo, score, world-stage label), title screen, pause overlay, stage-clear overlay. Draws into the same canvas or DOM overlay. |
+| `debug.js` | Installs `window.__game` (Section 4). Imported only in debug builds (flag in `game.js`). |
+
+## GLOBAL CONTEXT
+
+One plain object created in `game.js` at boot and passed to every module's `init(ctx)` / `update(ctx, dt)` / `draw(ctx)` calls. No module imports another; all cross-module data flows through `ctx`.
+
+```js
+/**
+ * ctx – the single global context object.
+ * Every field is plain data (numbers, strings, booleans, arrays,
+ * plain objects). No class instances, no closures, no DOM refs
+ * (except the canvas element itself, stored once).
+ */
+const ctx = {{
+  // ---- environment ----
+  canvas:        null,            // HTMLCanvasElement
+  ctx2d:         null,            // CanvasRenderingContext2D
+  seed:          0,               // uint32 – current PRNG seed
+  rng:           null,            // function(): number  – seeded PRNG
+  dt:            0.016666667,     // fixed timestep in seconds
+  time:          0,               // seconds elapsed in current stage (accumulated)
+  frame:         0,               // integer tick counter (current stage)
+  running:       true,            // false while paused
+  state:         'title',         // 'title'|'play'|'pause'|'stage-clear'|'world-clear'|'game-over'
+
+  // ---- input (written by input.js, read by everyone) ----
+  input: {{
+    moveDir:     0,               // -1 left, 0 neutral, +1 right
+    jumpPressed: false,           // true on the single tick the key goes down
+    jumpHeld:    false,
+    crouchHeld:  false,
+    firePressed: false,
+    fireHeld:    false,
+    switchNext:  false,           // edge
+    weaponSlot:  0,               // 0 = no explicit slot this frame, 1-5 = slot
+    pause:       false,
+    restart:     false,
+    touch:       null,            // {{x,y,active}} or null
+  }},
+
+  // ---- player (written by player.js, read by physics/weapons/enemies/ui) ----
+  player: {{
+    x: 0, y: 0,                   // world position (feet / bottom-centre)
+    vx: 0, vy: 0,                 // velocity px/s
+    w: <PLAYER_W>, h: <PLAYER_H>,// current hitbox (h shrinks when crouching)
+    facing: 1,                    // +1 right, -1 left
+    onGround: false,
+    crouching: false,
+    state: 'idle',                // 'idle'|'run'|'jump'|'fall'|'crouch'|'hurt'|'dead'
+    hp: <PLAYER_MAX_HP>,          // integer
+    lives: <PLAYER_LIVES>,        // integer
+    invulnTimer: 0,               // seconds remaining of post-hit invincibility
+    weaponIndex: 0,               // index into player.weapons
+    weapons: [0,0,0,0,0],         // 0 = not owned, >0 = owned (id)
+    ammo:  [0,0,0,0,0],           // per-slot ammo (0 = infinite for some guns)
+    shootCooldown: 0,             // seconds until next shot allowed
+  }},
+
+  // ---- weapons / projectiles (written by weapons.js) ----
+  projectiles: [ /* pool of {{x,y,vx,vy,w,h,damage,alive,owner}} */ ],
+  projectilePoolSize: <PROJECTILE_POOL>,
+
+  // ---- enemies (written by enemies.js) ----
+  enemies: [ /* pool of {{x,y,vx,vy,w,h,hp,type,alive,state,timer,...}} */ ],
+  enemyPoolSize: <ENEMY_POOL>,
+
+  // ---- particles (written by particles.js) ----
+  particles: [ /* ring buffer of {{x,y,vx,vy,life,maxLife,alive}} */ ],
+  particlePoolSize: <PARTICLE_POOL>,
+
+  // ---- level (written by level.js) ----
+  level: {{
+    world:  1,                    // 1-based
+    stage:  1,                    // 1-based
+    tiles:  null,                 // Uint8Array, row-major, level.width × level.height
+    width:  0,                    // tiles
+    height: 0,                    // tiles
+    spawnX: 0, spawnY: 0,        // player start in world px
+    exitX:  0, exitY:  0,        // stage exit trigger zone
+    hazards: null,                // Uint8Array same dims as tiles
+    entitySpawns: [],             // [{{type,x,y,dir}}]
+    bgParallax: 0.3,              // 0-1 factor for background scroll
+  }},
+
+  // ---- camera ----
+  camera: {{ x: 0, y: 0, w: 1280, h: 720 }},
+
+  // ---- progression ----
+  progression: {{
+    score: 0,
+    totalStages: 10,              // 2 worlds × 5 stages
+    unlockedWorld: 1,
+    unlockedStage: 1,
+    stagesCleared: [],            // array of "W-S" strings
+  }},
+
+  // ---- audio queue (written by any module, consumed by audio.js) ----
+  audioQueue: [],                 // [{{id:'jump'|'shoot'|'hit'|...}}]
+}};
+```
+
+## Per-Module Exports
+
+Every module exposes an object with `init(ctx)`, `update(ctx, dt)`, and (where applicable) `draw(ctx, c2d)`. Additional functions are listed below.
+
+### `game.js`
+| Export | Purpose |
+|---|---|
+| `boot(canvas, seed)` | Creates `ctx`, calls every module's `init`, starts rAF loop. |
+| `setState(state)` | Transitions the top-level state machine; resets `time`, `frame`, `rng` per stage. |
+| `loop(timestamp)` | rAF callback: accumulates, runs ticks, draws once. |
+
+### `input.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Registers `keydown/keyup/touch*` listeners on `window`/`canvas`. |
+| `update(ctx, dt)` | Latches edge-triggered flags, clears them after the tick. |
+| `reset(ctx)` | Clears all input flags (called on pause, stage change). |
+
+### `physics.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Pre-computes tile lookup tables. |
+| `update(ctx, dt)` | Integrates all entities, resolves tile + entity collisions. |
+| `isSolid(ctx, tx, ty)` | Returns bool; true if tile at (tx,ty) blocks movement. |
+| `isHazard(ctx, tx, ty)` | Returns bool; true if tile damages on contact. |
+| `tileAt(ctx, wx, wy)` | Returns tile type at world pixel position. |
+| `resolveAABB(a, b)` | Returns `{{overlapX, overlapY, normalX, normalY}}` or null. |
+
+### `player.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Builds player record from `ctx.level.spawnX/Y`. |
+| `update(ctx, dt)` | State machine: reads `ctx.input`, sets velocity, handles jump/crouch/fire. |
+| `hurt(ctx, dmg)` | Applies damage, sets invuln, triggers knockback, checks death. |
+| `respawn(ctx)` | Resets player to spawn, decrements lives. |
+| `getHitbox(ctx)` | Returns `{{x,y,w,h}}` reflecting crouch state. |
+
+### `weapons.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Loads weapon definitions array (≥4 entries). |
+| `update(ctx, dt)` | Ticks cooldowns, advances / despawns projectiles, applies projectile–enemy and projectile–player collisions. |
+| `fire(ctx, weaponId)` | Spawns a projectile from the pool using the weapon's stats. |
+| `getWeaponDef(id)` | Returns the definition object for a weapon id. |
+| `switchWeapon(ctx, dir)` | Advances `player.weaponIndex` through owned weapons. |
+
+### `enemies.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Loads enemy definitions; populates pool from `ctx.level.entitySpawns`. |
+| `update(ctx, dt)` | Runs each alive enemy's AI, applies gravity/collision, handles death & drops. |
+| `spawn(ctx, type, x, y, dir)` | Pulls an enemy from the pool and configures it. |
+| `kill(ctx, enemy)` | Sets alive=false, pushes audio event, spawns particles, rolls drop via `ctx.rng()`. |
+
+### `level.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Loads level data for `ctx.level.world / stage`. |
+| `update(ctx, dt)` | Checks if player overlaps `exitX/exitY` trigger zone → pushes `stage-clear`. |
+| `load(ctx, world, stage)` | Rebuilds tile arrays, spawn lists, resets `time`/`frame`. |
+| `isSolid(ctx, tx, ty)` / `isHazard(ctx, tx, ty)` / `tileAt(ctx, wx, wy)` | Delegates to the tile data. |
+
+### `camera.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Sets viewport size from canvas. |
+| `update(ctx, dt)` | Dead-zone follow of player, clamp to `[0, levelWidth-viewportW]` × `[0, levelHeight-viewportH]`. |
+
+### `particles.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Allocates ring buffer of `particlePoolSize` structs. |
+| `update(ctx, dt)` | Advances each alive particle, recycles when `life <= 0`. |
+| `spawn(ctx, x, y, vx, vy, life)` | Writes into next ring-buffer slot. |
+| `getAlive(ctx)` | Returns array (or iterator) of alive particles for the renderer. |
+
+### `audio.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Creates `AudioContext`, pre-builds oscillator / noise buffers. |
+| `update(ctx, dt)` | Drains `ctx.audioQueue`, plays sounds. |
+| `play(ctx, id)` | Queues a sound event (called by other modules via the queue, not directly). |
+
+### `progression.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Sets `totalStages`, unlock table. |
+| `update(ctx, dt)` | On `stage-clear` event: records clear, advances or loops stage/world index. |
+| `advance(ctx)` | Moves to next stage; if last stage of world, moves to next world; if last world, triggers `world-clear` / win. |
+| `restart(ctx)` | Resets current stage only (keeps lives, score). |
+
+### `ui.js`
+| Export | Purpose |
+|---|---|
+| `init(ctx)` | Nothing special. |
+| `draw(ctx, c2d)` | Renders HUD, title screen, pause, overlays depending on `ctx.state`. |
+
+### `debug.js`
+See Section 4.
+
+---
+
+# 3. BUDGETS
+
+Every number below is an **assertion target** for the test suite.
+
+| Budget | Limit |
+|---|---|
+| Frame time (all ticks + one draw) | ≤ **16.6 ms** on a 2 GHz single-core baseline. |
+| Canvas draw operations per frame | ≤ **600** `drawImage`/`fillRect`/`stroke` calls. |
+| Entity caps (alive simultaneously) | Player: 1 · Enemies: **40** · Projectiles: **120** · Particles: **512** |
+| Pool sizes (allocated, may be mostly dead) | Enemies: 64 · Projectiles: 256 · Particles: 1024 |
+| Tile map per stage | ≤ **200 × 80** tiles (16 000 entries, `Uint8Array` → 16 KB) |
+| Level data (all 10 stages, in memory) | ≤ **256 KB** |
+| Total JS heap (game state + pools) | ≤ **4 MB** |
+| Audio nodes alive at once | ≤ **16** |
+| Max world width (px) | ≤ **6400** (200 tiles × 32 px) |
+| Max world height (px) | ≤ **2560** (80 tiles × 32 px) |
+| Projectiles per weapon per shot | ≤ **5** (spread / shotgun max) |
+| Enemies spawned per stage (total over lifetime) | ≤ **80** |
+
+---
+
+# 4. DEBUG API
+
+Installed by `debug.js` as `window.__game`. Every call is **synchronous**, returns **plain data** (numbers, strings, booleans, arrays, plain objects), and never touches the DOM.
+
+| Call | What it does | Returns |
+|---|---|---|
+| `__game.start()` | Transitions from `title` → `play`, loads stage `1-1`, initialises player. No click required. | `void` |
+| `__game.step(dt, n)` | Runs exactly `n` fixed ticks of `dt` seconds each (in tick order from §1), then draws once. | `void` |
+| `__game.setTime(t)` | Runs ticks until `ctx.time ≥ t`, **without** drawing. | `void` |
+| `__game.seed(n)` | Reseeds `ctx.rng` with `n`, calls `level.load(ctx, 1, 1)`, resets player and all pools. | `void` |
+| `__game.getState()` | Returns a deep-cloned plain object containing every field listed in §2's `ctx` (minus `canvas`, `ctx2d`, `rng` function). | `{{state, time, frame, seed, player, level, camera, progression, enemies: [...], projectiles: [...], particles: [...]}}` |
+| `__game.move(dir)` | Sets `ctx.input.moveDir = dir` (-1, 0, +1). Persists until next call. | `void` |
+| `__game.jump()` | Sets `ctx.input.jumpPressed = true` for the next tick. | `void` |
+| `__game.crouch(on)` | Sets `ctx.input.crouchHeld = on`. | `void` |
+| `__game.fire(on)` | Sets `ctx.input.fireHeld = on` and `firePressed = true` if transitioning to on. | `void` |
+| `__game.switchWeapon(dir)` | Sets `ctx.input.switchNext = true` (dir is ignored; cycles forward). | `void` |
+| `__game.selectSlot(n)` | Sets `ctx.input.weaponSlot = n` (1-5). | `void` |
+| `__game.spawnEnemy(type, x, y, dir)` | Calls `enemies.spawn(ctx, type, x, y, dir)`. | `{{id, x, y, type, alive}}` |
+| `__game.spawnProjectile(weaponId, x, y, vx, vy)` | Pulls from projectile pool and configures. | `{{id, x, y, alive}}` |
+| `__game.skipToStage(w, s)` | Calls `level.load(ctx, w, s)`, resets player, sets state to `play`. | `{{world, stage, spawnX, spawnY}}` |
+| `__game.setField(path, value)` | Sets `ctx` field at dotted path, e.g. `"player.hp"`, `"progression.score"`. | `void` |
+| `__game.getFrameCount()` | Returns `ctx.frame`. | `number` |
+| `__game.getDrawCalls()` | Returns the number of canvas draw ops from the last draw. | `number` |
+| `__game.getStateHash()` | Returns a 32-bit hash of `getState()` JSON. For determinism checks. | `number` |
+
+**Determinism guarantee:** Given the same `seed(n)` and the same sequence of `__game.*` calls, `getState()` returns byte-identical data every time. No call reads wall-clock time or `Math.random()`.
+
+---
+
+# 5. TESTS
+
+All tests drive the game **exclusively** through `window.__game`. Numbered in execution order.
+
+### T1 – Title → Play
+```
+__game.seed(42)
+__game.start()
+state = __game.getState()
+```
+Assert: `state.state === 'play'`, `state.level.world === 1`, `state.level.stage === 1`, `state.player.x === state.level.spawnX`, `state.player.y === state.level.spawnY`.
+
+### T2 – Fixed-timestep movement (right)
+```
+__game.seed(42); __game.start()
+__game.move(1)
+__game.step(1/60, 60)   // 1 second of rightward movement
+p = __game.getState().player
+```
+Assert: `p.x > <player-start-x> + <player-speed> * 0.9` (within 10 % tolerance for acceleration ramp), `p.onGround === true`, `p.facing === 1`.
+
+### T3 – Jump physics
+```
+__game.seed(42); __game.start()
+__game.jump()
+__game.step(1/60, 1)
+p = __game.getState().player
+```
+Assert: `p.vy > 0`, `p.onGround === false`, `p.state === 'jump'`.
+
+### T4 – Crouch changes hitbox
+```
+__game.seed(42); __game.start()
+h0 = __game.getState().player.h
+__game.crouch(true)
+__game.step(1/60, 1)
+h1 = __game.getState().player.h
+```
+Assert: `h1 < h0`, `__game.getState().player.crouching === true`.
+
+### T5 – Fire weapon (gun 1)
+```
+__game.seed(42); __game.start()
+__game.selectSlot(1)
+__game.fire(true)
+__game.step(1/60, 1)
+pr = __game.getState().projectiles.filter(p => p.alive)
+```
+Assert: `pr.length >= 1`, `pr[0].x > __game.getState().player.x` (fired rightward), `pr[0].vx > 0`.
+
+### T6 – All 4+ weapon types fire
+```
+__game.seed(42); __game.start()
+for slot in [1,2,3,4]:
+    __game.selectSlot(slot)
+    __game.fire(true)
+    __game.step(1/60, 1)
+    count += alive projectiles
+```
+Assert: after 4 iterations, at least 4 distinct `weaponId` values appear across all alive projectiles.
+
+### T7 – Weapon switch
+```
+__game.seed(42); __game.start()
+w0 = __game.getState().player.weaponIndex
+__game.switchWeapon(1)
+__game.step(1/60, 1)
+w1 = __game.getState().player.weaponIndex
+```
+Assert: `w1 !== w0`.
+
+### T8 – Enemy spawn & existence
+```
+__game.seed(42); __game.start()
+e = __game.spawnEnemy('grunt', 300, 0, -1)
+__game.step(1/60, 1)
+en = __game.getState().enemies.filter(x => x.alive)
+```
+Assert: `en.length >= 1`, `en[0].type === 'grunt'`, `en[0].x === 300`.
+
+### T9 – Projectile kills enemy
+```
+__game.seed(42); __game.start()
+e = __game.spawnEnemy('grunt', 200, 0, -1)
+__game.fire(true)
+__game.step(1/60, 120)  // 2 seconds – projectile should reach enemy
+en = __game.getState().enemies.filter(x => x.alive)
+```
+Assert: `en.length === 0` (or `en[0].hp <= 0` before despawn), `__game.getState().progression.score > 0`.
+
+### T10 – Player takes damage
+```
+__game.seed(42); __game.start()
+hp0 = __game.getState().player.hp
+__game.spawnEnemy('grunt', 5, 0, 1)  // enemy right at player
+__game.step(1/60, 30)
+hp1 = __game.getState().player.hp
+```
+Assert: `hp1 < hp0`, `__game.getState().player.state === 'hurt'`.
+
+### T11 – Stage clear → advance
+```
+__game.seed(42); __game.start()
+// teleport player to exit
+__game.setField('player.x', __game.getState().level.exitX)
+__game.setField('player.y', __game.getState().level.exitY)
+__game.step(1/60, 10)
+s = __game.getState()
+```
+Assert: `s.level.stage === 2`, `s.level.world === 1`, `s.progression.stagesCleared` contains `"1-1"`.
+
+### T12 – World progression (2 worlds, 5 stages each)
+```
+__game.seed(42); __game.start()
+for w in [1,2]:
+    for s in [1..5]:
+        __game.skipToStage(w, s)
+        __game.setField('player.x', __game.getState().level.exitX)
+        __game.setField('player.y', __game.getState().level.exitY)
+        __game.step(1/60, 10)
+final = __game.getState()
+```
+Assert: `final.progression.stagesCleared.length === 10`, `final.state === 'world-clear'` (or `'play'` if looping back).
+
+### T13 – Restart preserves stage, resets player
+```
+__game.seed(42); __game.start()
+__game.move(1); __game.step(1/60, 60)
+__game.setField('state', 'play')  // ensure not in transition
+// trigger restart via input
+__game.setField('input.restart', true)
+__game.step(1/60, 1)
+s = __game.getState()
+```
+Assert: `s.level.stage === 1`, `s.player.x === s.level.spawnX`, `s.player.hp === <PLAYER_MAX_HP>`.
+
+### T14 – Pause / resume
+```
+__game.seed(42); __game.start()
+__game.setField('input.pause', true)
+__game.step(1/60, 1)
+s1 = __game.getState()
+f1 = s1.frame
+__game.step(1/60, 10)
+s2 = __game.getState()
+```
+Assert: `s1.state === 'pause'`, `s2.frame === f1` (no ticks ran while paused).
+
+### T15 – Draw-call budget
+```
+__game.seed(42); __game.start()
+__game.skipToStage(1, 1)
+__game.step(1/60, 30)
+dc = __game.getDrawCalls()
+```
+Assert: `dc <= 600`.
+
+### T16 – Entity pool cap respected
+```
+__game.seed(42); __game.start()
+for i in 0..65:
+    __game.spawnEnemy('grunt', 50 + i*10, 0, -1)
+en = __game.getState().enemies.filter(x => x.alive)
+```
+Assert: `en.length <= 40` (pool cap enforced).
+
+### T17 – Determinism
+```
+__game.seed(1337)
+__game.start()
+__game.move(1); __game.jump(); __game.fire(true)
+__game.step(1/60, 300)
+h1 = __game.getStateHash()
+
+__game.seed(1337)
+__game.start()
+__game.move(1); __game.jump(); __game.fire(true)
+__game.step(1/60, 300)
+h2 = __game.getStateHash()
+```
+Assert: `h1 === h2`.
+
+### T18 – Same seed, different call order → different state (sanity)
+```
+__game.seed(1337); __game.start(); __game.fire(true); __game.step(1/60,1); __game.jump(); __game.step(1/60,1)
+hA = __game.getStateHash()
+__game.seed(1337); __game.start(); __game.jump(); __game.step(1/60,1); __game.fire(true); __game.step(1/60,1)
+hB = __game.getStateHash()
+```
+Assert: `hA !== hB` (confirms the hash is sensitive to order).
+
+---
+
+# 6. BUILD ORDER
+
+| # | Milestone | Modules added / completed | Proof check |
+|---|---|---|---|
+| **M1** | Page opens, draws title, enters play | `game.js` (state machine, rAF loop), `canvas` setup, `ui.js` (title + HUD skeleton), `debug.js` (`start`, `step`, `getState`, `seed`) | **T1** passes. |
+| **M2** | Player moves, jumps, crouches on a flat tile floor | `input.js`, `physics.js`, `player.js`, `level.js` (single flat strip) | **T2, T3, T4** pass. |
+| **M3** | Camera follows player; full tile map renders | `camera.js`, `level.js` (full stage 1-1 tiles), `ui.js` (HUD) | **T15** passes (draw-call budget on a real level). |
+| **M4** | 4 gun types fire projectiles; weapon switching | `weapons.js` (definitions + projectile pool), `player.js` (shoot state) | **T5, T6, T7** pass. |
+| **M5** | Enemies patrol, take damage, die; score | `enemies.js`, `particles.js`, `audio.js` | **T8, T9, T10** pass. |
+| **M6** | Stage-clear trigger, world/stage progression, restart, pause | `progression.js`, `game.js` (transition states), `ui.js` (overlays) | **T11, T12, T13, T14** pass. |
+| **M7** | All 10 stages authored; touch controls; full audio | `level.js` (all data), `input.js` (touch), `audio.js` (music + SFX) | **T16** (pool cap under load), **T17, T18** (determinism). |
+| **M8** | Polish: parallax, particle variety, difficulty ramp per world, game-over screen | `particles.js`, `ui.js`, `enemies.js` (per-world variants) | Full regression: **T1–T18** all pass. |
+
+---
+
+# 7. RISKS
+
+| # | Risk | Why it bites *this* game | Rule that prevents it |
+|---|---|---|---|
+| **R1** | **Y-axis sign flip between logic and render.** Game logic uses Y-up; canvas is Y-down. If the `ctx.scale(1,-1)` translate is applied in the wrong order or forgotten for one draw path (e.g. HUD), the player appears to fall upward or the HUD is mirrored. | A platformer's entire feel depends on gravity direction; a single missed transform makes the game unplayable and is hard to spot in a screenshot. | **Rule:** The renderer's `draw()` function is the *only* place that touches `ctx2d`. It calls `applyWorldTransform(c2d)` (translate + `scale(1,-1)`) before any world-space drawing and `resetTransform()` before HUD/title drawing. No other module ever receives `ctx2d`. A unit test asserts that after `applyWorldTransform`, a point at game-logic `(0, 100)` maps to canvas `(0, -100)` relative to the camera. |
+| **R2** | **Timing race between the fixed-tick accumulator and variable rAF.** If `requestAnimationFrame` fires with a large delta (tab was backgrounded, GC pause), the loop either runs hundreds of catch-up ticks (stutter) or clamps and silently skips time (desync between `ctx.time` and real seconds, breaking jump apexes and enemy timers). | Jump height, projectile travel, and enemy patrol timing are all expressed in `DT`-units; a missed or extra tick shifts the player's landing by a tile. | **Rule:** The accumulator clamps to a maximum of **5** catch-up ticks per rAF callback. If more than 5 ticks are owed, the excess is **discarded** (not deferred) and `ctx.time` still advances by the full real delta so timers don't drift. `__game.step(dt, n)` bypasses the accumulator entirely, guaranteeing tests are immune to rAF jitter. |
+| **R3** | **Per-frame allocation pressure from projectiles / particles / enemy updates causes GC hitches that blow the 16.6 ms budget.** A naive `for…of` over a growing array or creating `{{}}` literals inside the update loop allocates every tick; at 60 fps with 120 projectiles + 512 particles + 40 enemies that is thousands of small objects per second. | The game is CPU-bound on a single thread; one GC pause > 16 ms drops a frame, which cascades into a physics step that's too large, which mis-resolves a collision, which the player perceives as "falling through a platform." | **Rule:** All three pools (enemies, projectiles, particles) are **pre-allocated fixed-size arrays of plain objects** created once in `init()`. Update loops mutate fields in place; "death" sets `alive = false`; "spawn" scans for the first `alive === false` slot. **No `new`, no `{{}}`, no `.push()`, no `.splice()` inside any `update()` function.** The `getState()` debug function clones data into a fresh object (acceptable because it is never called inside the game loop). A test asserts `getDrawCalls()` and heap size after 3 000 ticks to confirm zero net allocation. |
+</engineering.md>

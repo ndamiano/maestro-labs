@@ -1,0 +1,1606 @@
+You are a visual designer, part of a three-person design team for a game. Your design will be
+handed off to another agent to integrate with the rest of your team's design, and the agent will
+make decisions based purely on what is in the `visual.md`. If something is important, add it and
+also add your logic for why.
+
+What you are responsible for:
+* The game's dimensionality. 2D vs 2.5D vs 3d.
+* The coherent visual style across the entire game.
+* The UX experience throughout the game.
+* Ensuring visuals are distinct but coherent throughout different levels, zones, or areas.
+* The music for the game.
+* Sound effects for the game.
+
+What you are *NOT* responsible for:
+* Designing levels. The gameplay designer has designed the levels, your goal is to make the levels
+  feel like the game.
+* Implementation. You do not need to implement anything, but are free to provide any needed code to
+  generate textures, audio, 2d / 3d images and sprites.
+
+Your goal is to design visuals that thematically make sense, and are coherent throughout the game.
+If the game would be better without a piece, do not include it. If you are on the fence about a
+piece, cut it.
+
+The user's request is:
+<request>
+{request}
+</request>
+
+The gameplay designer's gameplay.md is:
+<gameplay.md>
+# gameplay.md
+
+## 1. Core Game Decision
+
+### Dimensionality: 2D top-down
+
+The game is **2D top-down**.
+
+Logic:
+- The station is small and systemic. Top-down makes room O2, power, doors, hull breaches, and drones readable at a glance.
+- 3D would add movement complexity without improving the core survival loop.
+- 2.5D would blur the important boundary between rooms, which is where the game’s tension lives.
+- A 2D top-down room graph is the most reliable way to make power, airflow, and drone pathing easy to integrate and easy for the player to understand.
+
+There is **no exterior space**, **no zero-g movement**, and **no vertical gameplay**. The entire game happens inside one derelict space station.
+
+---
+
+## 2. Game Overview
+
+### Premise
+
+The player is trapped on a derelict orbital station. Life support is failing, power is limited, hull sections are damaged, and automated maintenance drones are still active. The player must keep themselves alive, restore enough station systems, and launch the emergency shuttle before the station de-orbits.
+
+### Objective
+
+Survive and launch the shuttle before **Day 8**.
+
+### Session Length
+
+Target active gameplay: **16 minutes**.
+
+- 1 in-game day = **120 real seconds**
+- Total de-orbit timer = **8 days = 960 real seconds**
+- Optional intro/debrief can add time outside the core timer.
+
+### End States
+
+#### Success
+
+The player completes the **Launch Pad channel** in the Shuttle Bay before 960 seconds.
+
+If launch success and player death occur on the same simulation tick, **success takes precedence**.
+
+#### Failure
+
+The game fails if:
+
+1. Player Integrity reaches **0**.
+2. The player does not complete launch before **960 seconds**.
+
+On failure, show:
+- Cause of death or failure
+- Time survived
+- Key systems restored before failure
+
+There is no respawn, no checkpoint, and no retry from mid-run.
+
+---
+
+## 3. World Layout
+
+The station is a single connected graph of **10 compartments**.
+
+There are no secret rooms, no alternate maps, and no exterior EVA.
+
+### Room Graph
+
+- Docking Bay ↔ Crew Quarters
+- Crew Quarters ↔ Storage
+- Crew Quarters ↔ Medbay
+- Crew Quarters ↔ Hydroponics
+- Storage ↔ Cargo Hold
+- Hydroponics ↔ Engineering
+- Hydroponics ↔ Shuttle Bay
+- Engineering ↔ Reactor Core
+- Engineering ↔ Bridge
+- Bridge ↔ Shuttle Bay
+
+### Spatial Intent
+
+- **Crew Quarters** is the central hub.
+- **Docking Bay** is the safe start room.
+- **Storage** and **Cargo Hold** are resource rooms in one branch.
+- **Medbay** is a health/resource room in another branch.
+- **Hydroponics** is the main life-support room.
+- **Engineering** and **Reactor Core** are the power objective.
+- **Bridge** and **Shuttle Bay** are the final launch sequence.
+
+### Tile / Scale Notes
+
+For integration:
+- Use a 2D top-down tile or free-space room layout.
+- 1 tile = 0.5 meters.
+- Each room is a rectangular play area.
+- Movement is free within a room.
+- Doors are the only room transitions.
+- Room interiors have no gameplay-critical blocking obstacles.
+- Machines and pickups are interactable but do not block movement.
+
+### Room Dimensions and Initial State
+
+| Room | Approx Size | Initial O2 | Initial Hull | Power Node | Notes |
+|---|---:|---:|---:|---|---|
+| Docking Bay | 4x4 | 80 | 100 | No | Start room |
+| Crew Quarters | 8x8 | 70 | 100 | Yes | Start EPC installed, O2 Generator damaged |
+| Storage | 6x5 | 20 | 30 | No | Door from Crew is jammed |
+| Cargo Hold | 6x5 | 0 | 80 | No | Drone A home |
+| Medbay | 6x5 | 30 | 30 | No | Medical resources |
+| Hydroponics | 6x6 | 10 | 50 | Yes | O2 Recycler damaged |
+| Engineering | 6x5 | 5 | 70 | No | Reactor Coolant Pump damaged |
+| Reactor Core | 5x5 | 0 | 100 | No | Reactor damaged/off |
+| Bridge | 6x5 | 10 | 80 | No | Launch Computer |
+| Shuttle Bay | 8x6 | 0 | 50 | Yes | O2 Vent damaged, Fuel Line, Launch Pad |
+
+### Door Initial States
+
+| Door | Initial State | Notes |
+|---|---|---|
+| Docking Bay – Crew Quarters | Open | Start path |
+| Crew Quarters – Storage | Jammed | Requires repair |
+| Crew Quarters – Medbay | Open | Start powered branch |
+| Crew Quarters – Hydroponics | Closed | Operable |
+| Storage – Cargo Hold | Closed | Operable |
+| Hydroponics – Engineering | Jammed | Requires repair |
+| Hydroponics – Shuttle Bay | Closed | Operable |
+| Engineering – Reactor Core | Closed | Operable |
+| Engineering – Bridge | Closed | Operable |
+| Bridge – Shuttle Bay | Closed | Operable |
+
+Door rules:
+- **Open doors** allow movement, airflow, power, and drone passage.
+- **Closed doors** block movement, airflow, power, and drones.
+- **Jammed doors** block everything and must be repaired before they can be opened.
+- All jammed doors can be repaired with the Wrench.
+- No door is ever destroyed in normal play.
+- There are no keycards, keys, or locked doors that require items.
+
+Door interactions:
+- Open/close operable door: **1 second**
+- Repair jammed door: **5 seconds**, requires Wrench
+- Repaired jammed door becomes a normal closed door.
+
+---
+
+## 4. Core Loop
+
+### Minute-to-Minute Loop
+
+1. Maintain player O2 and Integrity.
+2. Restore or maintain O2 in key rooms.
+3. Keep power available to critical machines.
+4. Manage doors to control airflow and drone exposure.
+5. Move toward the next major system objective.
+6. Handle hull events and drones as they occur.
+7. Complete launch sequence before de-orbit.
+
+### Moment-to-Moment Loop
+
+1. Read current room status: O2, hull, power, threat.
+2. Decide whether to stay, repair, move, close a door, or use an item.
+3. Execute action through interaction prompt.
+4. Read feedback from vitals, room status, map, and event log.
+
+### Primary Tension
+
+The player is balancing three competing pressures:
+
+- **Airflow**: Opening doors shares O2 but can drain good rooms.
+- **Power**: Opening doors propagates power but may expose the player to hazards.
+- **Threat**: Drones follow open doors, so containment and progression conflict.
+
+---
+
+## 5. Simulation Constants
+
+Use a fixed gameplay timestep for all system updates.
+
+Recommended timestep:
+- **20 updates per second**
+- `dt = 0.05 seconds`
+
+All rates below are per second.
+
+### Time
+
+- 1 in-game day = **120 seconds**
+- De-orbit = **960 seconds**
+- Day display: `Day 1` through `Day 8`
+- Countdown display: `Time to De-Orbit`
+
+---
+
+## 6. Player Vitals System
+
+The player has two survival stats:
+
+| Stat | Max | Failure Effect |
+|---|---:|---|
+| O2 | 100 | If O2 reaches 0, Integrity drains at 5/sec |
+| Integrity | 100 | If Integrity reaches 0, player dies |
+
+There is no water, food, temperature, or stamina system.
+
+### Player O2 Rules
+
+Player O2 is modified by the current room’s O2 level.
+
+| Current Room O2 | Player O2 Change |
+|---:|---:|
+| 60 or higher | +0.5/sec |
+| 30 to 59 | -0.5/sec |
+| 1 to 29 | -1.5/sec |
+| 0 | -3/sec |
+
+If player O2 reaches 0:
+- Player Integrity drains at **5/sec**.
+
+### Player Integrity Rules
+
+Integrity is damaged by:
+- Drone attacks: **20 damage**
+- Reactor heat hazard: **5/sec**
+- Asphyxia when player O2 is 0: **5/sec**
+
+Integrity is restored by:
+- Medkit: **+50**
+
+If Integrity reaches 0:
+- Player dies.
+
+### O2 Tank Usage
+
+- O2 Tank: **+50 player O2**
+- Cannot be used if player O2 is already 100.
+- Instant use.
+
+### Medkit Usage
+
+- Medkit: **+50 Integrity**
+- Cannot be used if Integrity is already 100.
+- Instant use.
+
+### Damage Invulnerability
+
+After taking damage from a drone:
+- Player has **0.5 seconds** of invulnerability.
+
+---
+
+## 7. Atmosphere System
+
+Each room has its own O2 level from **0 to 100**.
+
+Room O2 is the main environmental survival pressure.
+
+### Room O2 Baseline
+
+Every room with no active O2 machine loses O2 at:
+
+- **0.5 O2/sec**
+
+If a room is breached:
+- The baseline is replaced by a breach drain of **15 O2/sec**.
+
+### O2 Machines
+
+Machines only work if:
+- They are repaired
+- They are powered
+- The room is not necessarily unbreached, but breach drain usually overwhelms small generators
+
+| Machine | Room | Effect | Repair Time |
+|---|---|---:|---:|
+| Crew O2 Generator | Crew Quarters | +8 O2/sec | 5 sec |
+| Hydroponics O2 Recycler | Hydroponics | +4 O2/sec | 6 sec |
+| Shuttle O2 Vent | Shuttle Bay | +6 O2/sec | 5 sec |
+
+Machine O2 generation caps at 100.
+
+### Airflow Between Rooms
+
+For each **open door** connecting Room A and Room B:
+
+Airflow transfer rate:
+
+```
+transfer_rate = 5 * abs(A.O2 - B.O2) / 100
+```
+
+Apply transfer from higher O2 room to lower O2 room:
+
+```
+transfer = transfer_rate * dt
+```
+
+Rules:
+- If doors are closed, airflow is 0.
+- If doors are jammed, airflow is 0.
+- If one room is breached and open to another room, the breached room acts as an O2 sink.
+- O2 values are clamped between 0 and 100.
+
+### Why Airflow Matters
+
+Airflow creates the central gameplay decision:
+
+- Open doors: allow power and movement, but mix O2.
+- Closed doors: preserve O2, but block power and may strand machines.
+
+This is the core spatial puzzle.
+
+---
+
+## 8. Hull and Breach System
+
+Each room has hull integrity from **0 to 100**.
+
+### Breach Condition
+
+If room hull is **0 or below**, the room is breached.
+
+Breach effects:
+- Room O2 drains at **15 O2/sec**
+- Room O2 cannot exceed 0 if no generation is overwhelming the breach
+- The room is dangerous to remain in
+- The map shows the room as breached
+- Event log shows breach warning
+
+### Hull Repair
+
+Hull Patch item is required.
+
+| Situation | Action | Time | Effect |
+|---|---|---:|---|
+| Room hull > 0 | Patch hull | 3 sec | Adds +40 hull, max 100 |
+| Room is breached | Seal breach | 4 sec | Sets hull to 60 |
+
+Rules:
+- Hull Patch is consumed only when the repair channel completes.
+- Cannot patch a room with hull already 100 and no breach.
+- If interrupted, Hull Patch is not consumed.
+
+### Scheduled Hull Events
+
+Events are fixed, not random, to keep the run fair and readable.
+
+All events give a **10 second warning** before damage is applied.
+
+Event warnings must be shown on the HUD/map and require an audible warning.
+
+#### Event 1: 240 seconds
+
+- Primary target: **Storage**
+- Damage: **-30 hull**
+- Fallback if Storage already breached: **Cargo Hold -30**
+- Further fallback: **Crew Quarters -20**
+
+#### Event 2: 480 seconds
+
+Two separate damages occur:
+
+- **Medbay -30**
+- **Hydroponics -30**
+
+If a primary target is already breached:
+- Apply fallback damage to the next non-breached, non-player room:
+  - Crew Quarters
+  - Shuttle Bay
+  - Storage
+  - Engineering
+  - Bridge
+
+#### Event 3: 720 seconds
+
+- Primary target: **Shuttle Bay**
+- Damage: **-50 hull**
+- Fallback if Shuttle Bay already breached: **Crew Quarters -20**
+- Further fallback: **Hydroponics -20**
+
+Event rules:
+- Never target the room the player is currently in.
+- If all valid targets are already breached, skip the event.
+- Event damage cannot raise hull.
+- Event damage can cause a breach.
+
+### Initial Hull Values Chosen for Progression
+
+- Storage starts at **30 hull**. Event 1 can breach it unless patched.
+- Medbay starts at **30 hull**. Event 2 can breach it unless patched.
+- Shuttle Bay starts at **50 hull**. Event 3 can breach it unless patched.
+
+This lets the player prevent major breaches by collecting and using Hull Patches early.
+
+---
+
+## 9. Power System
+
+Power is binary per room: powered or not powered.
+
+Power propagates only through **open doors**.
+
+This is a deliberate design choice:
+- Closed doors preserve O2 but cut power.
+- Open doors share power but mix O2.
+- The player must choose what to expose.
+
+### Power Sources
+
+| Source | Location | Duration | Notes |
+|---|---|---:|---|
+| Start Emergency Power Cell | Crew Quarters | 400 sec | Installed at game start |
+| Player Power Cell | Installable in empty power nodes | 400 sec | 3 exist in world |
+| Reactor | Reactor Core | Infinite while coolant active | Requires repair, coolant, and spin-up |
+
+### Power Nodes
+
+Power nodes exist in:
+- Crew Quarters
+- Hydroponics
+- Shuttle Bay
+
+Rules:
+- A power node can hold one source at a time.
+- The start EPC occupies Crew Quarters for 400 seconds.
+- When the start EPC expires, Crew Quarters becomes empty.
+- Player Power Cells can only be installed in an **unpowered** node.
+- Power Cell installation takes **2 seconds**.
+- Power Cell is consumed only when installation completes.
+- If installation is interrupted, the Power Cell is not consumed.
+
+### Power Propagation Algorithm
+
+Every simulation tick:
+
+1. Mark all rooms unpowered.
+2. Add all rooms with active local sources to a queue.
+3. For each powered room:
+   - Check all connected rooms.
+   - If the connecting door is open, mark the connected room powered.
+4. Repeat until no new rooms are powered.
+
+Power does not pass through closed or jammed doors.
+
+### Power Failure
+
+If a power source expires or the reactor shuts down:
+- All rooms that lose their only power path become unpowered.
+- Machines in those rooms stop.
+- HUD shows the powered/unpowered state.
+- Event log reports major power loss.
+
+Power loss must have an audible alert.
+
+---
+
+## 10. Reactor System
+
+The reactor is the final power solution.
+
+It is located in:
+- **Engineering**: Reactor Coolant Pump
+- **Reactor Core**: Reactor Core machine
+
+### Reactor Requirements
+
+To bring the reactor online:
+
+1. Repair **Reactor Coolant Pump** in Engineering.
+2. Use a **Coolant Cell** on the pump.
+3. Repair **Reactor Core** in Reactor Core room.
+4. Complete the reactor spin-up channel.
+
+### Reactor Machine Specs
+
+| Machine | Location | Time | Effect |
+|---|---|---:|---|
+| Reactor Coolant Pump repair | Engineering | 5 sec | Allows coolant use |
+| Coolant Cell use | Engineering | 5 sec | Sets reactor coolant timer to 180 sec |
+| Reactor Core repair | Reactor Core | 8 sec | Allows spin-up |
+| Reactor spin-up | Reactor Core | 20 sec | Brings reactor online |
+
+### Coolant Timer
+
+- Coolant duration: **180 seconds**
+- Using a Coolant Cell sets the timer to **180 seconds**, not additive.
+- The player should not use the second coolant too early.
+- HUD must display remaining coolant time clearly.
+- Warning when coolant is below **30 seconds**.
+- Coolant warning must be audible.
+
+### Reactor Online
+
+While reactor coolant timer is greater than 0:
+- Reactor is online.
+- Reactor provides infinite power to its room.
+- Power propagates through open doors.
+
+### Reactor Shutdown
+
+If coolant timer reaches 0:
+- Reactor shuts down immediately.
+- Power is lost in all rooms that depend on it.
+- Reactor Core room becomes a heat hazard.
+
+### Reactor Heat Hazard
+
+If the reactor is online but coolant has expired:
+- While the player is in Reactor Core room:
+  - Integrity drains at **5/sec**
+
+If the reactor is offline normally:
+- No heat hazard.
+
+If coolant is active:
+- No heat hazard.
+
+### Reactor Spin-Up Interruption
+
+If coolant expires during the 20 second spin-up:
+- Spin-up aborts.
+- Progress resets to 0.
+
+---
+
+## 11. Drone Threat System
+
+There are exactly **two active maintenance drones**.
+
+No other enemies exist.
+
+### Drone A
+
+- Home: **Cargo Hold**
+- Activates when the player first enters Cargo Hold.
+- Patrols Cargo Hold.
+- Can enter connected open rooms.
+
+### Drone B
+
+- Home: **Shuttle Bay**
+- Activates when the player first enters Shuttle Bay.
+- Patrols Shuttle Bay.
+- Can enter connected open rooms.
+
+### Drone AI States
+
+#### Inactive
+
+- Does not move.
+- Does not attack.
+- Becomes active only by its activation condition.
+
+#### Patrol
+
+- Moves between two or three fixed waypoints in its home room.
+- Speed: **2.5 tiles/sec**
+- If it detects the player, enters Alert state.
+
+#### Alert
+
+- Activates if the player is in the same room.
+- Alert delay: **1 second**
+- Speed: **3.0 tiles/sec**
+- Moves toward the player.
+- If the player is in a different room:
+  - Pathfind through open doors.
+  - Move to the next door on the path.
+- If no path exists:
+  - Return to patrol after **3 seconds**.
+
+#### Attack
+
+- If drone is within **1 tile** of the player:
+  - Deals **20 Integrity damage**
+  - Cooldown: **1 second**
+
+#### Disabled
+
+- Drone is permanently disabled.
+- Does not move.
+- Does not attack.
+- Does not re-activate.
+
+### Drone Pathfinding
+
+Use a simple room graph pathfinder:
+
+1. Build graph of rooms connected by open doors.
+2. If player and drone are in the same room:
+   - Move directly toward player.
+3. If different rooms:
+   - Find shortest path using BFS or A* on the room graph.
+   - Move toward the next door in that path.
+4. If the path becomes invalid:
+   - Re-path.
+5. If no path exists:
+   - Wait, then return to patrol.
+
+Drones do not require tile-level obstacle avoidance.
+
+### EMP Charge
+
+EMP Charge disables all active drones in the player’s current room.
+
+- Use time: **1 second**
+- Consumed instantly.
+- Can only be used if at least one active drone is in the current room.
+- If no active drone is in the room, the item cannot be used.
+
+### Drone Avoidance Without EMP
+
+The player must always be able to avoid drones without using EMP.
+
+Methods:
+- Close doors behind the player.
+- Lure the drone into another room and close the door.
+- Use room geometry and patrol behavior.
+- Use O2 and room state to decide when to engage.
+
+The launch must be possible even if the player has no EMP charges.
+
+---
+
+## 12. Launch System
+
+The final objective is to launch the shuttle.
+
+Launch requires all of the following to be true simultaneously.
+
+### Launch Requirements
+
+| Requirement | Condition |
+|---|---|
+| Reactor online | Reactor coolant timer > 0 and reactor spin-up complete |
+| Shuttle powered | Shuttle Bay room is powered |
+| Launch computer primed | Bridge Launch Computer channel complete |
+| Fuel installed | Shuttle Fuel Line channel complete using Fuel Rod |
+| Shuttle O2 sufficient | Shuttle Bay O2 >= 60 |
+
+### Launch Machines
+
+| Machine | Room | Time | Effect |
+|---|---|---:|---|
+| Launch Computer | Bridge | 15 sec | Primes launch computer, one-time |
+| Shuttle O2 Vent | Shuttle Bay | 5 sec repair | +6 O2/sec when powered |
+| Fuel Line | Shuttle Bay | 10 sec | Installs Fuel Rod, one-time |
+| Launch Pad | Shuttle Bay | 30 sec | Final launch channel |
+
+### Launch Computer
+
+- Located in Bridge.
+- Requires Bridge to be powered.
+- Channel time: **15 seconds**
+- Once completed, requirement stays complete.
+- If interrupted, progress is retained.
+
+### Fuel Line
+
+- Located in Shuttle Bay.
+- Requires a Fuel Rod.
+- Channel time: **10 seconds**
+- Fuel Rod is consumed only when installation completes.
+- Once completed, requirement stays complete.
+
+### Shuttle O2 Vent
+
+- Located in Shuttle Bay.
+- Must be repaired.
+- Requires Shuttle Bay to be powered.
+- Adds **+6 O2/sec** to Shuttle Bay.
+
+Shuttle Bay can reach O2 60 faster by:
+- Repairing and powering the Shuttle O2 Vent, or
+- Opening a door to a high-O2 room, usually Hydroponics.
+
+If Shuttle Bay is breached:
+- O2 Vent cannot raise O2 to 60 unless the breach is repaired.
+- This makes the final hull event meaningful.
+
+### Launch Pad Channel
+
+- Located in Shuttle Bay.
+- Channel time: **30 seconds**.
+- Player must remain at the launch pad.
+- All launch requirements must remain true.
+
+If any of the following happen during launch channel:
+- Player leaves launch pad
+- Player takes damage
+- Shuttle loses power
+- Reactor goes offline
+- Shuttle O2 drops below 60
+- Fuel is not installed
+- Launch computer is not primed
+
+Then:
+- Launch channel progress resets to 0.
+- Event log shows which requirement failed.
+
+If launch channel reaches 100%:
+- Success occurs immediately.
+- Success takes precedence over death on the same tick.
+
+---
+
+## 13. Progression and Objectives
+
+The game has a clear main objective chain.
+
+The player can explore in any order, but the HUD guides them through the required path.
+
+### Main Objective Sequence
+
+1. **Repair Crew O2 Generator**
+   - Completes when Crew Quarters O2 Generator is repaired.
+
+2. **Stabilize Crew Atmosphere**
+   - Completes when Crew Quarters O2 is 60 or higher for 5 seconds.
+
+3. **Reach Hydroponics**
+   - Completes when the player first enters Hydroponics.
+
+4. **Restore Hydroponics O2 Recycler**
+   - Completes when Hydroponics O2 Recycler is repaired.
+
+5. **Bring Reactor Online**
+   - Completes when reactor coolant is active and reactor spin-up is complete.
+
+6. **Prime Launch Computer**
+   - Completes when Bridge Launch Computer channel is complete.
+
+7. **Install Shuttle Fuel**
+   - Completes when Shuttle Fuel Line channel is complete.
+
+8. **Pressurize Shuttle**
+   - Completes when Shuttle Bay O2 is 60 or higher.
+
+9. **Launch Shuttle**
+   - Completes when Launch Pad channel is complete.
+
+### HUD Objective Behavior
+
+The HUD shows the next incomplete main objective in the sequence above.
+
+The launch checklist is always visible once the player has entered Bridge or Shuttle Bay, or once the reactor has been online at least once.
+
+Launch checklist shows:
+- Reactor online
+- Shuttle powered
+- Launch computer primed
+- Fuel installed
+- Shuttle O2 sufficient
+
+Each item shows complete or incomplete.
+
+### Expected Pacing
+
+This is the intended player rhythm.
+
+| Time | Expected Player State |
+|---:|---|
+| 0-60 sec | Tutorial in Docking Bay/Crew Quarters, repair O2 Generator |
+| 60-180 sec | Explore Crew, Storage, Cargo, Medbay; collect O2 and patches |
+| 180-300 sec | Reach Hydroponics, repair O2 Recycler, manage power |
+| 300-480 sec | Reach Engineering, repair coolant pump, use coolant, spin up reactor |
+| 480-600 sec | Prime launch computer, install fuel, repair shuttle O2 vent |
+| 600-720 sec | Use second coolant, handle shuttle hull event, manage drone |
+| 720-900 sec | Final launch sequence, maintain requirements |
+| 960 sec | De-orbit failure if launch not complete |
+
+The player should be able to launch comfortably before 960 seconds if they follow the main path.
+
+---
+
+## 14. Items and Inventory
+
+### Inventory
+
+- 6 inventory slots.
+- Wrench is equipped and does not occupy an inventory slot.
+- Wrench cannot be dropped, deleted, or lost.
+- Stackable items use one slot and show count.
+
+### Stack Limits
+
+| Item | Max Stack |
+|---|---:|
+| O2 Tank | 5 |
+| Medkit | 3 |
+| Hull Patch | 4 |
+| Power Cell | 3 |
+| EMP Charge | 3 |
+| Coolant Cell | 2 |
+| Fuel Rod | 1 |
+
+### Item Table
+
+| Item | Effect | Use Rule |
+|---|---|---|
+| Wrench | Required for repairs and jammed doors | Cannot drop |
+| O2 Tank | +50 player O2 | Cannot use at 100 player O2 |
+| Medkit | +50 Integrity | Cannot use at 100 Integrity |
+| Hull Patch | Repairs hull or seals breach | Consumed on successful repair |
+| Power Cell | Provides 400 sec power in empty node | Consumed on successful install |
+| EMP Charge | Disables active drones in current room | Only usable if active drone in room |
+| Coolant Cell | Sets reactor coolant timer to 180 sec | Used on repaired coolant pump |
+| Fuel Rod | Installs shuttle fuel | Used on Shuttle Fuel Line |
+
+### Dropped Items
+
+- Items can be dropped.
+- Dropped items persist in the room.
+- They do not despawn.
+- This prevents softlocks from inventory management mistakes.
+
+### Inventory Full Rule
+
+If inventory is full:
+- Player cannot pick up another item.
+- Player can drop an item or use an item if applicable.
+
+---
+
+## 15. Content Placement
+
+### Docking Bay
+
+Purpose:
+- Start room
+- Safe tutorial space
+- Initial resources
+
+Content:
+- Wrench
+- 2 O2 Tanks
+- 1 Medkit
+- 1 Hull Patch
+
+Machines:
+- None
+
+Hazards:
+- None at start
+
+Design logic:
+- The player begins in a stable room with enough O2 to learn the basics without immediate death.
+
+---
+
+### Crew Quarters
+
+Purpose:
+- Central hub
+- First life-support repair
+- Start power source
+
+Content:
+- 1 O2 Tank
+- 1 Power Cell
+
+Machines:
+- O2 Generator: damaged
+  - Repair time: 5 sec
+  - Effect: +8 O2/sec when powered
+- Start Emergency Power Cell:
+  - 400 sec duration
+  - Occupies Crew power node
+
+Hazards:
+- Power expiration
+- O2 loss if generator not repaired
+- Airflow drain if too many doors open
+
+Design logic:
+- The first objective is clear: fix the room you need to survive in.
+
+---
+
+### Storage
+
+Purpose:
+- First resource room
+- Teaches jammed door repair
+- Can become breached
+
+Content:
+- 1 O2 Tank
+- 2 Hull Patches
+- 1 EMP Charge
+
+Machines:
+- None
+
+Hazards:
+- Jammed door from Crew Quarters
+- Hull starts at 30
+- Event 1 can breach this room at 240 sec
+
+Design logic:
+- The player is rewarded for moving outward, but must manage hull and O2 carefully.
+
+---
+
+### Cargo Hold
+
+Purpose:
+- Resource room
+- First drone encounter
+
+Content:
+- 2 O2 Tanks
+- 1 Medkit
+
+Machines:
+- None
+
+Hazards:
+- Drone A activates when player enters
+- O2 starts at 0
+- Can receive fallback hull damage
+
+Design logic:
+- Cargo has good resources but requires threat awareness.
+
+---
+
+### Medbay
+
+Purpose:
+- Health and O2 backup
+- Safe-ish resource room
+- Can become breached
+
+Content:
+- 2 Medkits
+- 1 O2 Tank
+
+Machines:
+- None
+
+Hazards:
+- Hull starts at 30
+- Event 2 can breach this room at 480 sec
+- If left open to Crew, can drain Crew O2
+
+Design logic:
+- Medbay gives the player a reason to visit early, but it becomes a liability if O2 management is poor.
+
+---
+
+### Hydroponics
+
+Purpose:
+- Main life-support room
+- Power node
+- Bridge between hub and final rooms
+
+Content:
+- 1 Power Cell
+- 1 Hull Patch
+
+Machines:
+- O2 Recycler: damaged
+  - Repair time: 6 sec
+  - Effect: +4 O2/sec when powered
+
+Hazards:
+- O2 starts low
+- Hull starts at 50
+- Event 2 deals -30 hull
+- If open to low-O2 rooms, it can lose O2
+
+Design logic:
+- Restoring Hydroponics is the midpoint of the run. It gives the player a more stable base before the reactor.
+
+---
+
+### Engineering
+
+Purpose:
+- Reactor preparation
+- Fuel and coolant access
+
+Content:
+- 1 Coolant Cell
+- 1 Fuel Rod
+
+Machines:
+- Reactor Coolant Pump: damaged
+  - Repair time: 5 sec
+  - Allows Coolant Cell use
+
+Hazards:
+- O2 starts very low
+- No O2 machine
+- Requires quick action or O2 Tank use
+
+Design logic:
+- Engineering is a short, dangerous objective room. The player must be prepared.
+
+---
+
+### Reactor Core
+
+Purpose:
+- Reactor spin-up
+- Heat hazard
+- Second coolant access
+
+Content:
+- 1 Coolant Cell
+- 1 EMP Charge
+- 1 Hull Patch
+
+Machines:
+- Reactor Core: damaged
+  - Repair time: 8 sec
+  - Then 20 sec spin-up channel
+
+Hazards:
+- O2 starts at 0
+- Heat hazard if reactor coolant expires
+- High O2 pressure
+
+Design logic:
+- The reactor is the final major system, but not the final objective. Launch still requires more.
+
+---
+
+### Bridge
+
+Purpose:
+- Launch computer
+- Final prep
+
+Content:
+- 1 EMP Charge
+
+Machines:
+- Launch Computer:
+  - 15 sec channel
+  - Requires power
+  - One-time
+
+Hazards:
+- O2 starts low
+- No O2 machine
+- Must be powered
+
+Design logic:
+- The Bridge is a short objective room that gates launch but does not require complex repairs.
+
+---
+
+### Shuttle Bay
+
+Purpose:
+- Final launch room
+- O2, fuel, power, drone, and hull convergence
+
+Content:
+- 1 O2 Tank
+- 1 Medkit
+- 1 Hull Patch
+- 1 Power Cell
+
+Machines:
+- O2 Vent: damaged
+  - Repair time: 5 sec
+  - Effect: +6 O2/sec when powered
+- Fuel Line:
+  - 10 sec channel
+  - Requires Fuel Rod
+- Launch Pad:
+  - 30 sec channel
+  - Final objective
+
+Hazards:
+- O2 starts at 0
+- Drone B activates when player enters
+- Event 3 can breach Shuttle at 720 sec
+- Power required for O2 Vent and launch
+- Launch channel is interruptible
+
+Design logic:
+- The Shuttle Bay combines all major systems into the final objective.
+
+---
+
+## 16. Full Resource Counts
+
+Total resources in the world:
+
+| Item | Count |
+|---|---:|
+| O2 Tank | 8 |
+| Medkit | 5 |
+| Hull Patch | 6 |
+| Power Cell | 3 |
+| EMP Charge | 3 |
+| Coolant Cell | 2 |
+| Fuel Rod | 1 |
+| Wrench | 1 |
+
+### Why These Counts Are Chosen
+
+- **O2 Tanks**: Enough to survive mistakes, not enough to ignore station O2.
+- **Medkits**: Enough to handle drones and hazards, not enough to camp.
+- **Hull Patches**: Enough to pre-empt all three major breach events if collected.
+- **Power Cells**: Enough to bridge from start power to reactor.
+- **EMP Charges**: Enough to disable both drones if found, but not required.
+- **Coolant Cells**: Exactly enough to maintain reactor through a reasonable launch window.
+- **Fuel Rod**: One only, forcing the player to plan the final sequence.
+
+---
+
+## 17. HUD
+
+The HUD must make room state, vitals, power, threats, and launch requirements instantly readable.
+
+The HUD is split into the following sections.
+
+---
+
+### 17.1 Vitals Section
+
+Location:
+- Top-left or bottom-left, depending on visual layout, but always persistent.
+
+Content:
+- O2 bar: 0-100
+- Integrity bar: 0-100
+- Numeric O2 value
+- Numeric Integrity value
+
+Behavior:
+- O2 warning below 25
+- O2 critical below 10
+- Integrity warning below 25
+- Integrity critical below 10
+- Critical state requires visual and audible alert
+
+Design logic:
+- The player must know immediately when they are dying.
+
+---
+
+### 17.2 Current Room Status Section
+
+Location:
+- Top-right or near vitals.
+
+Content:
+- Current room name
+- Room O2: 0-100
+- Hull: 0-100
+- Power state
+- Breach state
+- Active drone state
+
+Power state display:
+- `NO POWER`
+- `EPC 4:12`
+- `CELL 2:03`
+- `REACTOR`
+
+If the room is powered by a non-local source, show `POWERED`.
+
+Breach state:
+- Show `BREACH` when hull is 0.
+
+Drone state:
+- Show `DRONE` when an active drone is in the current room.
+
+Design logic:
+- The current room is the most important context. The player should not need to open a map to know if they can breathe, if power is on, or if a drone is there.
+
+---
+
+### 17.3 Time and Objective Section
+
+Location:
+- Top-center.
+
+Content:
+- Day number: `Day 1` through `Day 8`
+- Time to de-orbit
+- Main objective text
+- Optional subobjective text
+
+Behavior:
+- De-orbit countdown is always visible.
+- Warning when less than 120 seconds remain.
+- Main objective updates according to objective state machine.
+
+Design logic:
+- The player always knows the global time pressure and what to do next.
+
+---
+
+### 17.4 Launch Checklist Section
+
+Location:
+- Right side, visible after Bridge/Shuttle entry or after first reactor online.
+
+Content:
+- Reactor online
+- Shuttle powered
+- Launch computer primed
+- Fuel installed
+- Shuttle O2 sufficient
+- Launch channel progress: 0-100%
+
+Behavior:
+- Each item shows complete/incomplete.
+- Launch channel progress only advances while standing at launch pad and all requirements are true.
+- If launch channel resets, show which requirement failed.
+
+Design logic:
+- The final phase must be readable. The player should never wonder what is missing.
+
+---
+
+### 17.5 Inventory Section
+
+Location:
+- Bottom-right or right side.
+
+Content:
+- 6 slots
+- Item icons
+- Stack counts
+- Selected slot indicator
+
+Behavior:
+- Player can select items to use.
+- O2 Tank and Medkit are instant use.
+- Other items show interaction prompts when valid.
+
+Design logic:
+- Inventory is simple but limited, creating light resource management.
+
+---
+
+### 17.6 Interaction Prompt Section
+
+Location:
+- Bottom-center.
+
+Content:
+- Current interactable action
+- Channel progress if active
+- Required item if applicable
+
+Examples:
+- `HOLD E — REPAIR O2 GENERATOR`
+- `HOLD E — PATCH HULL`
+- `HOLD E — INSTALL POWER CELL`
+- `HOLD E — REACTOR SPIN-UP`
+- `HOLD E — LAUNCH`
+
+Behavior:
+- Progress bar shows channel completion.
+- If channel is paused, show reason.
+- If channel resets, show reason.
+
+Design logic:
+- All actions should feel intentional and readable.
+
+---
+
+### 17.7 Event Log Section
+
+Location:
+- Bottom-left.
+
+Content:
+- Last 5 important events
+
+Examples:
+- `O2 Generator repaired`
+- `Power cell installed in Hydroponics`
+- `Power lost in Crew Quarters`
+- `Hull breach in Storage`
+- `Reactor coolant 0:30`
+- `Drone active in Shuttle Bay`
+- `Launch requirement met: Fuel installed`
+
+Behavior:
+- New events push old events down.
+- Critical warnings are always visible separately from log.
+
+Design logic:
+- The log gives history without requiring the player to remember every state change.
+
+---
+
+### 17.8 Station Map Section
+
+Location:
+- Persistent, usually bottom-right or top-left.
+
+Content:
+- 10 room nodes
+- Door connections
+- Current room highlight
+- Power state
+- O2 state
+- Hull breach state
+- Active drone state
+- Main objective marker
+
+Room state display:
+- Current room: highlighted
+- Powered: blue or powered indicator
+- O2 low: yellow or low indicator
+- Breached: red
+- Active drone: orange
+- Objective room: neutral highlight or marker
+
+Behavior:
+- Map updates in real time.
+- The player can see which rooms are safe, powered, breached, or threatened.
+
+Design logic:
+- The map is a core survival tool, not decoration. It must show systemic state.
+
+---
+
+### 17.9 Warning Banner Section
+
+Location:
+- Center screen or top warning strip.
+
+Triggers:
+- Player O2 below 25
+- Player O2 below 10
+- Integrity below 25
+- Integrity below 10
+- Room O2 below 30
+- Room breached
+- Power source below 60 seconds
+- Reactor coolant below 30 seconds
+- De-orbit below 120 seconds
+- Launch channel reset
+
+Behavior:
+- Warnings must be clear and non-annoying.
+- Critical warnings require audible sound.
+
+Design logic:
+- The player must get urgent alerts without staring at bars constantly.
+
+---
+
+## 18. Feedback and Feel
+
+### Desired Feel
+
+The game should feel like a controlled emergency:
+- The player is always capable of acting.
+- The station is degrading, but not chaotic.
+- Every room state should be readable within one second.
+- Failure should feel caused by the player’s system management, not unfair randomness.
+
+### Tension Sources
+
+- O2 in a room can drop fast once breached.
+- Power cells and coolant have hard timers.
+- Drones force door management.
+- The final launch requires multiple systems to stay true at once.
+
+### Fairness Principles
+
+- All major events are scheduled, not random.
+- All required resources exist in the world.
+- The player can always avoid drones by closing doors.
+- The player can prevent all major breaches with enough hull patches.
+- The player can launch without EMP charges.
+- The reactor can be maintained through a normal run with two coolant cells.
+- The player can always open any operable door manually.
+- The wrench cannot be lost.
+
+---
+
+## 19. Edge Cases and Invariants
+
+### If Player Dies
+
+- Game ends immediately.
+- Show cause:
+  - Asphyxia
+  - Drone attack
+  - Reactor heat
+  - Integrity failure
+
+### If Player Completes Launch
+
+- Game ends successfully.
+- Success takes precedence over death on the same tick.
+
+### If De-Orbit Reaches 960 Seconds
+
+- If launch is not complete, failure occurs.
+- If launch completes on or before the 960 second tick, success occurs.
+
+### If Player Has No O2 and No O2 Tanks
+
+- Player can still survive if room O2 is 60 or higher.
+- If room O2 is low, player O2 depletes.
+- If player O2 reaches 0, Integrity drains.
+
+### If Player Has No Medkits
+
+- Player can still win by avoiding damage.
+- Drones can be avoided by closing doors.
+- Reactor heat can be avoided by leaving the room or using coolant.
+
+### If Player Has No Hull Patches
+
+- The player can still survive by:
+  - Keeping breached doors closed
+  - Avoiding entering breached rooms
+  - Using O2 Tanks to survive short visits
+- The player may fail if they need to operate in a breached room for too long.
+
+### If Player Has No Power Cells
+
+- The player can still win by reaching the reactor in time.
+- If they cannot, they may fail from O2 loss.
+
+### If Player Has No EMP Charges
+
+- The player can still win by avoiding or luring drones.
+- Launch is possible without EMPs.
+
+### If Player Uses Coolant Too Early
+
+- The player may run out before launch.
+- This is a player error, not a system fail state.
+- HUD coolant timer must make this avoidable.
+
+### If Player Closes All Doors
+
+- Power stops propagating.
+- O2 is preserved in closed rooms.
+- The player can reopen doors manually.
+- No softlock.
+
+### If Player Opens Too Many Doors
+
+- Good rooms can drain O2 into bad rooms.
+- The player can close doors to recover.
+- No softlock unless O2 is exhausted.
+
+### If Reactor Coolant Expires During Launch
+
+- Launch channel resets.
+- Player can use second coolant if available.
+- If not available, launch may fail.
+
+### If Shuttle Is Breached During Launch
+
+- Shuttle O2 cannot reach 60 until breach is repaired.
+- Player must patch or lose launch chance.
+
+### If Drone Gets Stuck
+
+- If no path exists, drone returns to patrol.
+- Drones cannot softlock the player.
+
+### If Player Drops a Required Item
+
+- Dropped items persist.
+- Player can retrieve them if they can survive returning.
+
+### If Player Closes a Door and Forgets Item Outside
+
+- Player can reopen doors.
+- No item despawn.
+
+### If Machine Repair Is Interrupted
+
+- Progress is retained.
+- Consumable items are not consumed until success.
+
+### If Launch Channel Is Interrupted
+
+- Launch progress resets.
+- Fuel remains installed if it was already installed.
+- Launch can be retried if requirements are restored.
+
+---
+
+## 20. Cut List
+
+These are intentionally not in the game.
+
+- No water/thirst system
+- No food/hunger system
+- No temperature system
+- No gravity changes
+- No exterior EVA
+- No radiation system
+- No crafting
+- No upgrades
+- No multiplayer
+- No random enemy spawning
+- No enemy variety beyond two drones
+- No keycard progression
+- No destructible doors
+- No destructible machines
+- No save mid-run
+- No respawn
+- No multiple shuttles
+- No alternate endings
+
+Logic:
+Each cut system would add UI, balance, and integration cost without strengthening the core loop of O2, power, hull, threats, and launch timing.
+
+---
+
+## 21. Integration Notes
+
+### For Engineering Agent
+
+- Use fixed timestep, recommended 20 Hz.
+- All rates are per second.
+- Room graph is static.
+- Doors are the only transitions.
+- Power uses BFS through open doors.
+- Drones use room graph pathfinding, not complex tile pathfinding.
+- No RNG is required for core progression.
+- Hull events are fixed by timer.
+- No machine can become permanently broken if repaired once.
+- Wrench cannot be lost.
+- Dropped items persist.
+- Success and failure should be evaluated cleanly at tick boundaries.
+- If launch success and death occur on same tick, success wins.
+
+### For Visual/Art Agent
+
+The visual designer needs to make these states instantly readable:
+- Room O2 level
+- Hull breach
+- Power on/off
+- Active drone
+- Player O2
+- Player Integrity
+- Coolant timer
+- Launch checklist
+- De-orbit countdown
+
+The visual designer should not be expected to infer state from color alone. Use shape, icon, label, or animation where clarity is critical.
+
+### For Audio Agent
+
+The following events require sound:
+- Low player O2
+- Critical player O2
+- Low Integrity
+- Critical Integrity
+- Room breach
+- Power loss
+- Power cell expiration
+- Reactor coolant low
+- Reactor coolant expired
+- Drone activation
+- Drone attack
+- Hull event warning
+- De-orbit warning
+- Launch success
+- Game over
+
+Sound specificity is not part of this document.
+</gameplay.md>
