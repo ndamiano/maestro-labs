@@ -1,0 +1,4 @@
+A stealth heist game in an art museum at night, where guards walk patrol routes, cameras sweep cones, and every painting you steal reroutes the guards.
+A linear story RPG where the player awakens in a world remembering nothing, and journeys to find himself, saving the world in the process.
+A top-down space salvage game where you tow wrecks back to a station and the wrecks' parts upgrade your ship.
+A rhythm platformer where the level itself pulses to generated music and jumps land better on the beat.
