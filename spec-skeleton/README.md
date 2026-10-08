@@ -819,3 +819,29 @@ unexplained — "I'd pick the team's output every time"; platformers `795034905b
 one-shot) good with minor issues, `2ef94c3088a6` (Flash-Next skeleton) worse but good; island-ish
 `b10d6350808a` / `90a89ba593ee` both awful. **Clear winner: gameplay → visual → engineering →
 integrator, spec on disk as `design/` per section, layered build prompt.** Next: integrate.
+
+### Prove-it runs through the integrated chain (branch `design-team`), 2026-09-14 afternoon
+
+`python -m maestro.codegen.run --new "Survive on a derelict space station."` then `--build`,
+the real path (design.py chain → design.md → seeded design/design.md → build.txt), local 27B.
+
+- **1bb83927306e, medium (box setting):** design 5 calls / ~10 min (one continuation), spec 120K
+  chars, Node harness 0 (engineering prompt line held: tests on `window.__game`, `test.html`).
+  Build killed at turn 13: the control plane was still the pre-branch process and wrote
+  `done_nudged` into build_state.json, which the new BuildCursor refuses — the deploy note,
+  reproduced. All 224 local build_state.json files stripped.
+- **17c92bff6bda, xhigh (design AND build):** design 4 calls 472/343/525/426 s = 29.5 min, no
+  continuation, 57K-token integrator reply. Build **capped 200, 77 min**: whole spec read by turn
+  12, libs in full, first write at turn 33 (last night's medium builds: turn 7–12), 15 turns
+  thrown away at the 30K output cap (thinking), 5 compactions, 94 reads / 75 plays / 57 edits / 8
+  writes, no "Tier completed" print, no done. It wrote `tests.js` (42 tests on `window.__game`)
+  and `tests.html`, and never ran them: play() loads index.html only, so the designed runner page
+  is unreachable — the tests-in-files lab has to make the runner importable from the game page.
+  Renders well: full station map with sectors, O2/HP, "REPAIR SYSTEMS 0/6", sector status panel,
+  inventory, interact prompt. Play: http://127.0.0.1:8765/17c92bff6bda/index.html.
+
+Correction to last night's record: those builds ran at **medium** (the box's `llm.reasoning`;
+only `design.sh` sent xhigh). So the configuration Nick judged was design xhigh + build medium;
+this is the first build at xhigh and it doubled the wall and lost the done. One setting drives
+both stages today; a per-stage reasoning (design xhigh, build medium) is a settings key + one
+argument in design.py.
