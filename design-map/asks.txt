@@ -1,0 +1,5 @@
+A tower defense game where the enemies learn from where you placed your last towers and change their routes.
+A cozy fishing game on a mountain lake with a day and night cycle, where different fish come out at different hours.
+A rhythm platformer where the level itself pulses to generated music and jumps land better on the beat.
+A top-down space salvage game where you tow wrecks back to a station and the wrecks' parts upgrade your ship.
+A puzzle game about routing water through a garden with rotating pipe tiles, where each level's plants need different amounts.
