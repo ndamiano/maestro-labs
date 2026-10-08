@@ -17,7 +17,7 @@ solve it here — no engine split, no Modal (+60%), no Hetzner (monthly commit),
 | CUDA graph capture | ~26 s with --cuda-graph-bs 1 2 4 | 10-15 s | try bs {1,2} (builds run ≤2 streams) |
 
 ## THE PATCH: `--load-format prepacked` in the fork
-Clone at ~/Documents/Labs/penny-fork (jpezzulli/sglang-rtxpro6000 @ pennyroyal-v2.1.0).
+Clone at labs/penny-fork (jpezzulli/sglang-rtxpro6000 @ pennyroyal-v2.1.0).
 `process_weights_after_loading` (python/sglang/srt/layers/quantization/modelopt_quant.py:
 linear ~1770, MoE ~2422; invoked from model_loader/loader.py ~1018) rewrites layer params in place
 (deinterleave w13, pad, flashinfer shuffle_matrix_a/sf_a, rebind scales) + side attrs
